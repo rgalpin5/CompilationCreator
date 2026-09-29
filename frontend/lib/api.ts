@@ -1,6 +1,10 @@
-export const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-).replace(/\/+$/, "");
+// Same origin by default. Vercel rewrites `/api/*` and `/health` to the
+// backend service, and the API already mounts its routes under `/api`.
+// Set NEXT_PUBLIC_API_URL only when the API is on another origin, such as
+// `npm run dev` against uvicorn on port 8000. A service binding cannot
+// supply this value: every call below runs in the browser.
+const configured = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
+export const API_BASE = configured ? configured : "";
 
 export type Video = {
   video_id: string;
@@ -72,7 +76,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { "Content-Type": "application/json", ...init?.headers },
     });
   } catch {
-    throw new Error(`Could not reach the API at ${API_BASE}`);
+    throw new Error(
+      API_BASE ? `Could not reach the API at ${API_BASE}` : "Could not reach the API",
+    );
   }
 
   const body = await res.json().catch(() => null);
