@@ -1,13 +1,13 @@
 import base64
 import os
-import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 import yt_dlp
+from yt_dlp.utils import download_range_func
 
-from app.services.runner import runner
+from app.services.runner import JobCancelled, runner
 
 _YOUTUBE_HOSTS = {
     "youtube.com",
@@ -15,11 +15,51 @@ _YOUTUBE_HOSTS = {
     "m.youtube.com",
     "music.youtube.com",
 }
+_SHORT_HOSTS = {"youtu.be", "www.youtu.be"}
+_VIDEO_KINDS = {"shorts", "live", "embed", "v"}
 _TAB_SUFFIXES = ("/videos", "/streams", "/shorts", "/playlists", "/featured")
 
 
 class ChannelError(Exception):
     """User-facing failure while reading a channel."""
+
+
+def _is_video_id(value: str) -> bool:
+    return len(value) == 11 and all(char.isalnum() or char in "-_" for char in value)
+
+
+def _video_page_url(parsed) -> str | None:
+    host = parsed.netloc.lower()
+    parts = [part for part in parsed.path.split("/") if part]
+    if host in _SHORT_HOSTS and parts and _is_video_id(parts[0]):
+        return f"https://www.youtube.com/watch?v={parts[0]}"
+    if host not in _YOUTUBE_HOSTS:
+        return None
+    if parsed.path.rstrip("/") == "/watch":
+        return urlunparse(parsed._replace(params="", fragment=""))
+    if len(parts) >= 2 and parts[0] in _VIDEO_KINDS and _is_video_id(parts[1]):
+        return f"https://www.youtube.com/watch?v={parts[1]}"
+    return None
+
+
+def _uploader_channel_url(video_url: str) -> str:
+    options = _with_cookies(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "noplaylist": True,
+        }
+    )
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+    except Exception as exc:
+        raise ChannelError(f"Could not resolve that video to a channel: {exc}") from exc
+    channel = (info or {}).get("uploader_url") or (info or {}).get("channel_url")
+    if not isinstance(channel, str) or not channel.startswith(("http://", "https://")):
+        raise ChannelError("Could not resolve that video to a channel")
+    return channel
 
 
 def normalize_channel_url(url: str) -> str:
@@ -30,13 +70,18 @@ def normalize_channel_url(url: str) -> str:
         raw = "https://" + raw
 
     parsed = urlparse(raw)
+    video_url = _video_page_url(parsed)
+    if video_url:
+        channel = _uploader_channel_url(video_url)
+        if _video_page_url(urlparse(channel)):
+            raise ChannelError("Could not resolve that video to a channel")
+        return normalize_channel_url(channel)
+
     host = parsed.netloc.lower()
     if host not in _YOUTUBE_HOSTS:
         raise ChannelError("Paste a YouTube channel URL")
 
     path = parsed.path.rstrip("/") or "/"
-    if path == "/watch" or path.startswith("/watch"):
-        raise ChannelError("Paste a channel URL, not a single video")
     if path.startswith("/playlist"):
         raise ChannelError("Paste a channel URL, not a playlist")
 
@@ -181,14 +226,12 @@ def _download_with_sections(
     output_4k: bool,
     title: str,
 ) -> Path:
-    section = f"*{_section_clock(start)}-{_section_clock(end)}"
-    command = _ytdlp_command(
-        video_id,
+    options = _ytdlp_options(
         str(dest_stem) + ".%(ext)s",
         output_4k,
-        ["--download-sections", section],
+        {"download_ranges": download_range_func([], [(start, end)])},
     )
-    _run_ytdlp(command, output_4k, title)
+    _run_ytdlp(options, _watch_url(video_id), output_4k, title)
     return _find_download(dest_stem)
 
 
@@ -201,14 +244,13 @@ def _download_full_then_trim(
     title: str,
 ) -> Path:
     full_stem = dest_stem.parent / (dest_stem.name + "_full")
-    command = _ytdlp_command(
-        video_id,
+    options = _ytdlp_options(
         str(full_stem) + ".%(ext)s",
         output_4k,
-        ["--concurrent-fragments", _CONCURRENT_FRAGMENTS],
+        {"concurrent_fragment_downloads": int(_CONCURRENT_FRAGMENTS)},
     )
     try:
-        _run_ytdlp(command, output_4k, title)
+        _run_ytdlp(options, _watch_url(video_id), output_4k, title)
         full = _find_download(full_stem)
         dest = dest_stem.parent / (dest_stem.name + full.suffix)
 
@@ -246,40 +288,42 @@ def _download_full_then_trim(
             leftover.unlink(missing_ok=True)
 
 
-def _ytdlp_command(
-    video_id: str,
-    outtmpl: str,
-    output_4k: bool,
-    extra: list[str],
-) -> list[str]:
-    return [
-        sys.executable,
-        "-m",
-        "yt_dlp",
-        "--no-playlist",
-        "--no-warnings",
-        *_cookies_args(),
-        *extra,
-        "-f",
-        _format_selector(output_4k),
-        "--merge-output-format",
-        "mp4",
-        "-o",
-        outtmpl,
-        f"https://www.youtube.com/watch?v={video_id}",
-    ]
+def _watch_url(video_id: str) -> str:
+    return f"https://www.youtube.com/watch?v={video_id}"
 
 
-def _run_ytdlp(command: list[str], output_4k: bool, title: str) -> None:
-    result = runner.run(command)
-    if result.returncode == 0:
-        return
-    detail = (result.stderr or result.stdout or "yt-dlp failed").strip()
-    if output_4k and "requested format is not available" in detail.lower():
-        raise RuntimeError(
-            f"4K export needs every video to be available in 4K. These are not: {title}"
-        )
-    raise RuntimeError(detail[-800:])
+def _ytdlp_options(outtmpl: str, output_4k: bool, extra: dict) -> dict:
+    options = {
+        "noplaylist": True,
+        "no_warnings": True,
+        "quiet": True,
+        "noprogress": True,
+        "overwrites": True,
+        "format": _format_selector(output_4k),
+        "merge_output_format": "mp4",
+        "outtmpl": outtmpl,
+    }
+    options.update(extra)
+    return _with_cookies(options)
+
+
+def _run_ytdlp(options: dict, url: str, output_4k: bool, title: str) -> None:
+    def _hook(_status: dict) -> None:
+        runner.checkpoint()
+
+    options["progress_hooks"] = [_hook]
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            ydl.download([url])
+    except JobCancelled:
+        raise
+    except Exception as exc:
+        detail = str(exc).strip() or "yt-dlp failed"
+        if output_4k and "requested format is not available" in detail.lower():
+            raise RuntimeError(
+                f"4K export needs every video to be available in 4K. These are not: {title}"
+            ) from exc
+        raise RuntimeError(detail[-800:]) from exc
 
 
 def _probe_duration(path: Path) -> float | None:
@@ -324,16 +368,6 @@ def _with_cookies(options: dict) -> dict:
     if browser:
         options["cookiesfrombrowser"] = (browser,)
     return options
-
-
-def _cookies_args() -> list[str]:
-    cookiefile = _cookiefile()
-    if cookiefile:
-        return ["--cookies", cookiefile]
-    browser = _browser_name()
-    if browser:
-        return ["--cookies-from-browser", browser]
-    return []
 
 
 def _browser_name() -> str | None:
@@ -387,13 +421,6 @@ def _thumbnail(entry: dict, video_id: str) -> str | None:
     if len(video_id) == 11:
         return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
     return None
-
-
-def _section_clock(seconds: float) -> str:
-    total = int(seconds)
-    hours, rem = divmod(total, 3600)
-    minutes, secs = divmod(rem, 60)
-    return f"{hours}:{minutes:02d}:{secs:02d}"
 
 
 def _find_download(dest_stem: Path) -> Path:

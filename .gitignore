@@ -36,3 +36,6 @@ frontend/.env.local
 .DS_Store
 .idea/
 .vscode/
+
+# Local audit notes
+COMPCREATOR_AUDIT.md

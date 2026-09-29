@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from app.models import Clip
 from app.services.compiler import validate_timeline, videos_missing_4k
@@ -70,9 +71,58 @@ class ChannelUrlTests(unittest.TestCase):
         url = "https://www.youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaa/videos"
         self.assertEqual(normalize_channel_url(url), url)
 
-    def test_rejects_watch_url(self) -> None:
+    def test_rejects_playlist_url(self) -> None:
         with self.assertRaises(ChannelError):
-            normalize_channel_url("https://www.youtube.com/watch?v=abcdefghijk")
+            normalize_channel_url("https://www.youtube.com/playlist?list=PLxxxxxxxxxxxxxxxxxxxxxx")
+
+    def test_resolves_video_url_to_channel_videos_tab(self) -> None:
+        class FakeYDL:
+            def __init__(self, options: dict) -> None:
+                pass
+
+            def __enter__(self) -> "FakeYDL":
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+            def extract_info(self, url: str, download: bool = False) -> dict:
+                return {"uploader_url": "https://www.youtube.com/@somechannel"}
+
+        expected = "https://www.youtube.com/@somechannel/videos"
+        with patch("app.services.ytdlp_service.yt_dlp.YoutubeDL", FakeYDL):
+            self.assertEqual(
+                normalize_channel_url("https://www.youtube.com/watch?v=abcdefghijk"),
+                expected,
+            )
+            self.assertEqual(
+                normalize_channel_url("https://youtu.be/abcdefghijk?si=share"),
+                expected,
+            )
+            self.assertEqual(
+                normalize_channel_url("https://www.youtube.com/shorts/abcdefghijk"),
+                expected,
+            )
+
+    def test_video_resolution_uses_channel_url(self) -> None:
+        class FakeYDL:
+            def __init__(self, options: dict) -> None:
+                pass
+
+            def __enter__(self) -> "FakeYDL":
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+            def extract_info(self, url: str, download: bool = False) -> dict:
+                return {"channel_url": "https://www.youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaa"}
+
+        with patch("app.services.ytdlp_service.yt_dlp.YoutubeDL", FakeYDL):
+            self.assertEqual(
+                normalize_channel_url("https://www.youtube.com/watch?v=abcdefghijk"),
+                "https://www.youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaa/videos",
+            )
 
 
 if __name__ == "__main__":

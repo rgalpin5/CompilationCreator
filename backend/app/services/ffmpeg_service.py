@@ -77,31 +77,71 @@ def layouts_match(layouts: list[StreamLayout | None]) -> bool:
 
 def normalize_clip(source: Path, dest: Path, *, output_4k: bool = False) -> None:
     width, height = (3840, 2160) if output_4k else (1920, 1080)
-    command = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(source),
-        "-vf",
-        _scale(width, height),
-        "-r",
-        "30",
+    level = "5.1" if output_4k else "4.0"
+    layout = probe_layout(source)
+    has_audio = bool(layout and layout.audio_codec)
+    video = _scale(width, height) + ",fps=30,format=yuv420p"
+    command = ["ffmpeg", "-y", "-fflags", "+genpts", "-i", str(source)]
+    if has_audio:
+        command += [
+            "-filter_complex",
+            (
+                f"[0:v:0]{video}[v];"
+                "[0:a:0]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,"
+                "aresample=async=1:first_pts=0[a]"
+            ),
+            "-map",
+            "[v]",
+            "-map",
+            "[a]",
+        ]
+    else:
+        command += [
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=channel_layout=stereo:sample_rate=48000",
+            "-filter_complex",
+            f"[0:v:0]{video}[v]",
+            "-map",
+            "[v]",
+            "-map",
+            "1:a:0",
+            "-shortest",
+        ]
+    command += [
         "-c:v",
         "libx264",
         "-preset",
         "ultrafast",
         "-crf",
         "23",
+        "-profile:v",
+        "high",
+        "-level:v",
+        level,
         "-pix_fmt",
         "yuv420p",
+        "-fps_mode",
+        "cfr",
+        "-g",
+        "60",
+        "-keyint_min",
+        "60",
+        "-sc_threshold",
+        "0",
         "-c:a",
         "aac",
+        "-b:a",
+        "192k",
         "-ar",
         "48000",
         "-ac",
         "2",
         "-video_track_timescale",
         "90000",
+        "-avoid_negative_ts",
+        "make_zero",
         "-movflags",
         "+faststart",
         str(dest),
@@ -264,6 +304,43 @@ def concat_clips(clips: list[Path], dest: Path) -> None:
         str(list_file),
         "-c",
         "copy",
+        "-movflags",
+        "+faststart",
+        str(dest),
+    ]
+    _run(command)
+
+
+def concat_reencode(clips: list[Path], dest: Path) -> None:
+    command = ["ffmpeg", "-y"]
+    for clip in clips:
+        command += ["-i", str(clip)]
+    streams = "".join(f"[{index}:v:0][{index}:a:0]" for index in range(len(clips)))
+    command += [
+        "-filter_complex",
+        f"{streams}concat=n={len(clips)}:v=1:a=1[v][a]",
+        "-map",
+        "[v]",
+        "-map",
+        "[a]",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        "-fps_mode",
+        "cfr",
+        "-c:a",
+        "aac",
+        "-ar",
+        "48000",
+        "-ac",
+        "2",
+        "-video_track_timescale",
+        "90000",
         "-movflags",
         "+faststart",
         str(dest),

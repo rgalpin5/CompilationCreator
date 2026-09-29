@@ -11,6 +11,7 @@ from app.models import Clip
 from app.services.ffmpeg_service import (
     FfmpegError,
     concat_clips,
+    concat_reencode,
     finalize_clip,
     normalize_clip,
     prep_plan,
@@ -182,8 +183,14 @@ def run_compilation(
                 norm = job_dir / f"norm_{index:03d}.mp4"
                 normalize_clip(raw, norm, output_4k=output_4k)
                 normalized.append(norm)
+            output.unlink(missing_ok=True)
             store.update(job_id, status="concatenating", progress="Joining clips")
-            concat_clips(normalized, output)
+            try:
+                concat_clips(normalized, output)
+            except FfmpegError:
+                output.unlink(missing_ok=True)
+                store.update(job_id, status="concatenating", progress="Joining clips")
+                concat_reencode(normalized, output)
         store.update(
             job_id,
             status="ready",
