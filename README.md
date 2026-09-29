@@ -8,6 +8,11 @@ This is for personal use. There is no authentication.
 
 ## Desktop app
 
+The installers are already in this repository. Download the one for your computer. You do not need to build it.
+
+- macOS: [dist/CompCreator-mac.dmg](dist/CompCreator-mac.dmg)
+- Windows: [dist/CompCreator-windows.exe](dist/CompCreator-windows.exe)
+
 Install the build for your computer and open it. The window is the app. It does not use a shared YouTube login: downloads use the browser signed in on that machine. Finished compilations are kept in the app's folder on that computer, and the Download button in the window saves a copy as well.
 
 The first time a download runs, macOS may ask for Keychain access so the app can read that browser's YouTube cookies. Allow it. Chrome is used when it is installed, then Brave, Edge, Firefox, and Safari. Set `YTDLP_COOKIES_BROWSER` to one of those names before launching if you want a different one, or `none` to skip browser cookies.
@@ -73,7 +78,7 @@ See `.env.example` for a copy-paste starting point. For the frontend, put values
 
 ## Build the desktop app
 
-Build on the operating system you want to ship. A Mac produces `dist/CompCreator-mac.dmg` only. Windows produces `dist/CompCreator-windows.exe` only. Each of those is one file. GitHub Actions workflow `Desktop packages` builds both when you run it by hand or push a `v*` tag.
+The files in `dist/` are the installers to download. Rebuild only when you are changing the app. A Mac produces `dist/CompCreator-mac.dmg` only. Windows produces `dist/CompCreator-windows.exe` only. Each of those is one file. The `Desktop packages` workflow builds both and commits them back into `dist/` when you run it by hand, push a `v*` tag, or change the app or packaging.
 
 ```bash
 python packaging/build.py
