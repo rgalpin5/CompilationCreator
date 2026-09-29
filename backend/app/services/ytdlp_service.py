@@ -319,14 +319,33 @@ def _with_cookies(options: dict) -> dict:
     cookiefile = _cookiefile()
     if cookiefile:
         options["cookiefile"] = cookiefile
+        return options
+    browser = _browser_name()
+    if browser:
+        options["cookiesfrombrowser"] = (browser,)
     return options
 
 
 def _cookies_args() -> list[str]:
     cookiefile = _cookiefile()
-    if not cookiefile:
-        return []
-    return ["--cookies", cookiefile]
+    if cookiefile:
+        return ["--cookies", cookiefile]
+    browser = _browser_name()
+    if browser:
+        return ["--cookies-from-browser", browser]
+    return []
+
+
+def _browser_name() -> str | None:
+    """Browser whose YouTube login yt-dlp should read, if one was selected.
+
+    A cookie file wins over this. The desktop app sets the variable to the
+    browser installed on that computer so each person uses their own account.
+    """
+    name = os.environ.get("YTDLP_COOKIES_BROWSER", "").strip().lower()
+    if name in {"", "0", "none", "off"}:
+        return None
+    return name
 
 
 def _cookiefile() -> str | None:

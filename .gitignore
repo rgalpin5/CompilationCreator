@@ -25,6 +25,11 @@ frontend/.env.local
 .env.*
 !.env.example
 
+# Desktop packages
+/dist/
+/build/
+/packaging/vendor/
+
 # OS / editor
 .DS_Store
 .idea/

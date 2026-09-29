@@ -6,10 +6,32 @@ YouTube's Terms of Service restrict downloading content. Use this only for video
 
 This is for personal use. There is no authentication.
 
+## Desktop app
+
+Install the build for your computer and open it. The window is the app. It does not use a shared YouTube login: downloads use the browser signed in on that machine. Finished compilations are kept in the app's folder on that computer, and the Download button in the window saves a copy as well.
+
+The first time a download runs, macOS may ask for Keychain access so the app can read that browser's YouTube cookies. Allow it. Chrome is used when it is installed, then Brave, Edge, Firefox, and Safari. Set `YTDLP_COOKIES_BROWSER` to one of those names before launching if you want a different one, or `none` to skip browser cookies.
+
+### macOS
+
+1. Unzip `CompCreator-mac.zip`.
+2. Move `CompCreator.app` into Applications.
+3. The first time, Control-click the app and choose Open, then Open again. macOS blocks an unsigned app on a double-click.
+4. Finished compilations are in `~/Library/Application Support/CompCreator/jobs`. If the window fails to open, the log is `desktop.log` in that same CompCreator folder.
+
+### Windows
+
+1. Unzip `CompCreator-windows.zip`.
+2. Open the `CompCreator` folder and double-click `CompCreator.exe`. Leave the folder intact. The exe needs the files next to it.
+3. If Windows SmartScreen appears, choose More info, then Run anyway.
+4. Windows 11 already includes the WebView2 runtime the window needs. On Windows 10, install [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) if the window does not open.
+5. Finished compilations are in `%APPDATA%\CompCreator\jobs`. The log is `desktop.log` in that same CompCreator folder.
+
 ## Layout
 
 - `backend/`: FastAPI app (`app.main:app`). Uses yt-dlp to list and download videos and ffmpeg to trim and concatenate.
 - `frontend/`: Next.js (App Router) UI.
+- `packaging/`: builds the macOS and Windows apps.
 - `docker-compose.yml`: runs the backend only.
 
 ## Limits
@@ -49,6 +71,16 @@ Frontend:
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Base URL of the backend. Inlined at build time. |
 
 See `.env.example` for a copy-paste starting point. For the frontend, put values in `frontend/.env.local`.
+
+## Build the desktop app
+
+Build on the operating system you want to ship. A Mac produces the Mac zip only. Windows produces the Windows zip only. GitHub Actions workflow `Desktop packages` builds both when you run it by hand or push a `v*` tag. Artifacts are `CompCreator-mac.zip` and `CompCreator-windows.zip`.
+
+```bash
+python packaging/build.py
+```
+
+Needs Node.js, npm, and Python 3.12. The script installs the desktop Python packages into `build/venv`, exports the UI, downloads ffmpeg, and writes the zip under `dist/`.
 
 ## Local run
 
