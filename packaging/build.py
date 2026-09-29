@@ -1,8 +1,8 @@
 """Build a CompCreator desktop app for the OS you are running.
 
-A Mac build produces dist/CompCreator-mac.zip. A Windows build produces
-dist/CompCreator-windows.zip. Run this on each operating system; a Mac
-cannot produce the Windows app.
+A Mac build produces one file, dist/CompCreator-mac.dmg. A Windows build
+produces one file, dist/CompCreator-windows.exe. Run this on each operating
+system; a Mac cannot produce the Windows app.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import zipfile
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -36,8 +35,7 @@ def main() -> None:
     app_path = DIST / "CompCreator.app"
     if app_path.exists():
         shutil.rmtree(app_path)
-    _run(
-        [
+    command = [
             str(pyinstaller),
             "--noconfirm",
             "--clean",
@@ -87,9 +85,11 @@ def main() -> None:
             "--osx-bundle-identifier",
             "app.compcreator.desktop",
             str(ROOT / "packaging" / "entry.py"),
-        ]
-    )
-    archive = _zip_product()
+    ]
+    if sys.platform == "win32":
+        command.insert(3, "--onefile")
+    _run(command)
+    archive = _package_product()
     print(f"Wrote {archive}")
 
 
@@ -180,22 +180,6 @@ def _download(url: str, dest: Path) -> None:
         shutil.copyfileobj(response, handle)
 
 
-def _extract_named(archive: Path, scratch: Path, names: dict[str, Path]) -> None:
-    unpack = scratch / (archive.stem + "-unpack")
-    if unpack.exists():
-        shutil.rmtree(unpack)
-    unpack.mkdir(parents=True)
-    with zipfile.ZipFile(archive) as zipped:
-        zipped.extractall(unpack)
-    found = {path.name: path for path in unpack.rglob("*") if path.is_file()}
-    for name, target in names.items():
-        match = found.get(name)
-        if match is None:
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(match, target)
-
-
 def _venv_tool(name: str) -> Path:
     if sys.platform == "win32":
         python = VENV / "Scripts" / "python.exe"
@@ -211,27 +195,44 @@ def _venv_tool(name: str) -> Path:
     return tool
 
 
-def _zip_product() -> Path:
+def _package_product() -> Path:
     if sys.platform == "darwin":
         source = DIST / "CompCreator.app"
-        archive = DIST / "CompCreator-mac.zip"
+        archive = DIST / "CompCreator-mac.dmg"
         if not source.exists():
             raise SystemExit(f"Expected {source}.")
+        staging = BUILD / "dmg"
+        if staging.exists():
+            shutil.rmtree(staging)
+        staging.mkdir(parents=True)
+        shutil.copytree(source, staging / "CompCreator.app", symlinks=True)
+        applications = staging / "Applications"
+        if not applications.exists():
+            applications.symlink_to("/Applications")
         if archive.exists():
             archive.unlink()
-        _run(["ditto", "-c", "-k", "--keepParent", str(source), str(archive)])
+        _run(
+            [
+                "hdiutil",
+                "create",
+                "-volname",
+                "CompCreator",
+                "-srcfolder",
+                str(staging),
+                "-ov",
+                "-format",
+                "UDZO",
+                str(archive),
+            ]
+        )
         return archive
-    source = DIST / "CompCreator"
-    archive = DIST / "CompCreator-windows.zip"
-    exe = source / "CompCreator.exe"
+    exe = DIST / "CompCreator.exe"
     if not exe.is_file():
         raise SystemExit(f"Expected {exe}.")
+    archive = DIST / "CompCreator-windows.exe"
     if archive.exists():
         archive.unlink()
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zipped:
-        for path in source.rglob("*"):
-            if path.is_file():
-                zipped.write(path, Path("CompCreator") / path.relative_to(source))
+    exe.replace(archive)
     return archive
 
 

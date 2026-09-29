@@ -26,5 +26,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: compcreator-${{ matrix.os }}
-          path: dist/CompCreator-*.zip
+          path: dist/CompCreator-*
           if-no-files-found: error
