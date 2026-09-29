@@ -1,0 +1,9 @@
+# Backend only. Run the frontend on the host with `npm run dev` in ./frontend.
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8080"
+    environment:
+      CORS_ORIGINS: http://localhost:3000
+      JOBS_DIR: /app/data/jobs
