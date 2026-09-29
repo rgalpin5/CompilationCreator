@@ -8,7 +8,6 @@ on:
     branches:
       - main
     paths:
-      - ".github/workflows/desktop.yml"
       - "packaging/**"
       - "backend/**"
       - "frontend/**"
@@ -47,7 +46,10 @@ jobs:
           git lfs install --local
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- dist/CompCreator-mac.dmg dist/CompCreator-windows.exe
+          files=()
+          [ -f dist/CompCreator-mac.dmg ] && files+=(dist/CompCreator-mac.dmg)
+          [ -f dist/CompCreator-windows.exe ] && files+=(dist/CompCreator-windows.exe)
+          git add -- "${files[@]}"
           if git diff --cached --quiet; then
             echo "Installer already matches the repository."
             exit 0
