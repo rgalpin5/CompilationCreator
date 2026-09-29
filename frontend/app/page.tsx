@@ -20,6 +20,7 @@ import {
 import ChannelForm from "@/components/ChannelForm";
 import VideoGrid from "@/components/VideoGrid";
 import Timeline, { type TimelineClip } from "@/components/Timeline";
+import CutStep from "@/components/CutStep";
 import ExportBar from "@/components/ExportBar";
 import LogsPanel from "@/components/LogsPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,12 +28,22 @@ import { cn } from "@/lib/utils";
 
 const POLL_MS = 2000;
 
+function adjustAfterRemove(active: number, removed: number, length: number) {
+  const nextLength = length - 1;
+  if (nextLength <= 0) return 0;
+  if (active > removed) return active - 1;
+  if (active === removed) return Math.min(removed, nextLength - 1);
+  return active;
+}
+
 export default function Home() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loadingVideos, setLoadingVideos] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [clips, setClips] = useState<TimelineClip[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [stage, setStage] = useState<"pick" | "cuts">("pick");
   const [output4k, setOutput4k] = useState(false);
 
   const [job, setJob] = useState<Job | null>(null);
@@ -55,6 +66,9 @@ export default function Home() {
   const videoIdsRef = useRef<string[]>([]);
   videoIdsRef.current = videos.map((video) => video.video_id);
 
+  const cutIndex =
+    clips.length === 0 ? 0 : Math.min(activeIndex, clips.length - 1);
+
   const totalLength = useMemo(() => {
     let total = 0;
     for (const clip of clips) {
@@ -65,6 +79,13 @@ export default function Home() {
     }
     return formatSeconds(total);
   }, [clips]);
+
+  useEffect(() => {
+    if (stage !== "cuts") return;
+    document
+      .getElementById("cut-step")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [stage]);
 
   useEffect(() => {
     if (!job || !jobActive) return;
@@ -114,23 +135,27 @@ export default function Home() {
   function addVideo(video: Video) {
     if (busy) return;
     setValidationError(null);
-    setClips((prev) =>
-      prev.some((c) => c.video_id === video.video_id)
-        ? prev.filter((c) => c.video_id !== video.video_id)
-        : [
-            ...prev,
-            {
-              video_id: video.video_id,
-              title: video.title,
-              start: "00:00",
-              end: defaultEnd(video.duration_seconds),
-              channel: video.channel,
-              view_count: video.view_count,
-              duration_seconds: video.duration_seconds,
-              thumbnail: video.thumbnail,
-            },
-          ],
-    );
+    const existing = clips.findIndex((c) => c.video_id === video.video_id);
+    if (existing >= 0) {
+      setClips((prev) => prev.filter((c) => c.video_id !== video.video_id));
+      setActiveIndex((current) =>
+        adjustAfterRemove(current, existing, clips.length),
+      );
+      return;
+    }
+    setClips((prev) => [
+      ...prev,
+      {
+        video_id: video.video_id,
+        title: video.title,
+        start: "00:00",
+        end: defaultEnd(video.duration_seconds),
+        channel: video.channel,
+        view_count: video.view_count,
+        duration_seconds: video.duration_seconds,
+        thumbnail: video.thumbnail,
+      },
+    ]);
   }
 
   function updateClip(index: number, patch: Partial<TimelineClip>) {
@@ -143,16 +168,22 @@ export default function Home() {
   function removeClip(index: number) {
     setValidationError(null);
     setClips((prev) => prev.filter((_, i) => i !== index));
+    setActiveIndex((current) => adjustAfterRemove(current, index, clips.length));
   }
 
   function moveClip(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= clips.length) return;
     setValidationError(null);
     setClips((prev) => {
-      const target = index + direction;
-      if (target < 0 || target >= prev.length) return prev;
       const next = [...prev];
       [next[index], next[target]] = [next[target], next[index]];
       return next;
+    });
+    setActiveIndex((current) => {
+      if (current === index) return target;
+      if (current === target) return index;
+      return current;
     });
   }
 
@@ -163,6 +194,16 @@ export default function Home() {
     } catch (err) {
       setRequestError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  function openCuts() {
+    if (busy) return;
+    setRequestError(null);
+    const error = validateClips(clips);
+    setValidationError(error);
+    if (error) return;
+    setActiveIndex(0);
+    setStage("cuts");
   }
 
   async function exportCompilation() {
@@ -190,6 +231,7 @@ export default function Home() {
         output4k,
       );
       setJob(created);
+      setStage("pick");
     } catch (err) {
       setRequestError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -232,15 +274,35 @@ export default function Home() {
       <div className={view === "editor" ? "flex flex-col gap-6" : "hidden"}>
       <p className="text-sm text-muted-foreground">
         Stack 4–8 videos, about 20–30 minutes each, into one mega video.
+        Press export, then cut each intro and outro before the download starts.
       </p>
-      <ChannelForm
-        loading={loadingVideos}
-        error={loadError}
-        onSubmit={loadVideos}
-      />
+      <div className={stage === "pick" ? undefined : "hidden"}>
+        <ChannelForm
+          loading={loadingVideos}
+          error={loadError}
+          onSubmit={loadVideos}
+        />
+      </div>
 
+      {stage === "cuts" ? (
+        <CutStep
+          clips={clips}
+          index={cutIndex}
+          busy={busy}
+          job={job}
+          output4k={output4k}
+          validationError={validationError}
+          requestError={requestError}
+          onIndex={setActiveIndex}
+          onChange={updateClip}
+          onBack={() => setStage("pick")}
+          onOutput4kChange={setOutput4k}
+          onCancel={cancelExport}
+          onExport={exportCompilation}
+        />
+      ) : (
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_380px]">
-        <section className="flex flex-col gap-3">
+        <section className="flex min-w-0 flex-col gap-3">
           <h2 className="text-sm font-medium">Channel videos</h2>
           <VideoGrid
             videos={videos}
@@ -260,7 +322,6 @@ export default function Home() {
             <Timeline
               clips={clips}
               disabled={busy}
-              onChange={updateClip}
               onRemove={removeClip}
               onMove={moveClip}
             />
@@ -273,11 +334,12 @@ export default function Home() {
               validationError={validationError}
               requestError={requestError}
               onCancel={cancelExport}
-              onExport={exportCompilation}
+              onExport={openCuts}
             />
           </CardContent>
         </Card>
       </div>
+      )}
       </div>
       <div className={view === "logs" ? undefined : "hidden"}>
         <LogsPanel active={view === "logs"} />

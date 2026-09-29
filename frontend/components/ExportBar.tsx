@@ -13,6 +13,7 @@ type Props = {
   validationError: string | null;
   requestError: string | null;
   onOutput4kChange: (value: boolean) => void;
+  exportLabel?: string;
   onCancel: () => void;
   onExport: () => void;
 };
@@ -24,6 +25,7 @@ export default function ExportBar({
   output4k,
   validationError,
   requestError,
+  exportLabel = "Export mega video",
   onOutput4kChange,
   onCancel,
   onExport,
@@ -51,7 +53,7 @@ export default function ExportBar({
         </span>
       </label>
       <Button type="button" onClick={onExport} disabled={busy}>
-        {busy ? "Exporting…" : "Export mega video"}
+        {busy ? "Exporting…" : exportLabel}
       </Button>
       {busy && !showConfirm && (
         <Button type="button" variant="outline" onClick={() => setConfirming(true)}>

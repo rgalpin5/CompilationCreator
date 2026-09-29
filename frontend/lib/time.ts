@@ -67,3 +67,28 @@ export function defaultEnd(durationSeconds: number | null): string {
       : DEFAULT_CLIP_SECONDS;
   return formatSeconds(seconds);
 }
+
+/**
+ * Move the start or the end to a point on the video.
+ * The kept range stays at least one second, and neither side can pass the video length.
+ */
+export function setTrimPoint(
+  startSec: number,
+  endSec: number,
+  which: "start" | "end",
+  point: number,
+  duration: number | null,
+): { start: number; end: number } {
+  const max = duration != null && duration > 1 ? Math.floor(duration) : null;
+  const rounded = Math.max(0, Math.round(point));
+
+  if (which === "start") {
+    let start = max == null ? rounded : Math.min(rounded, max - 1);
+    start = Math.min(start, Math.max(0, endSec - 1));
+    return { start, end: endSec };
+  }
+
+  let end = max == null ? rounded : Math.min(rounded, max);
+  end = Math.max(end, startSec + 1);
+  return { start: startSec, end };
+}

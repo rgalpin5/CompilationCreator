@@ -56,7 +56,7 @@ class Runner:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            start_new_session=True,
+            **_popen_group_kwargs(),
         )
         if job_id:
             with self._lock:
@@ -78,7 +78,41 @@ class Runner:
         return subprocess.CompletedProcess(command, proc.returncode or 0, stdout, stderr)
 
 
+def _popen_group_kwargs() -> dict[str, object]:
+    if _windows():
+        # start_new_session is Unix-only. A new process group lets taskkill
+        # stop yt-dlp and the ffmpeg process it spawned.
+        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        return {"creationflags": flags}
+    return {"start_new_session": True}
+
+
+def _windows() -> bool:
+    # os.killpg is missing on Windows. Checking the attribute covers a Python
+    # build that reports a non-"nt" name but still has no process groups.
+    return os.name == "nt" or not hasattr(os, "killpg")
+
+
 def _kill_group(pid: int) -> None:
+    try:
+        if _windows():
+            _kill_windows_tree(pid)
+        else:
+            _kill_posix_group(pid)
+    except (OSError, AttributeError, subprocess.SubprocessError):
+        return
+
+
+def _kill_windows_tree(pid: int) -> None:
+    subprocess.run(
+        ["taskkill", "/F", "/T", "/PID", str(pid)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+
+
+def _kill_posix_group(pid: int) -> None:
     try:
         os.killpg(pid, signal.SIGTERM)
     except ProcessLookupError:

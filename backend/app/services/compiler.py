@@ -69,7 +69,10 @@ def _run_parallel(
     except JobCancelled:
         raise
     except BaseException:
-        runner.kill(job_id)
+        try:
+            runner.kill(job_id)
+        except Exception:
+            pass
         raise
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
