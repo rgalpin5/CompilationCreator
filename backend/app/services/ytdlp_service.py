@@ -1,4 +1,7 @@
+import base64
+import os
 import sys
+import tempfile
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
@@ -45,14 +48,16 @@ def normalize_channel_url(url: str) -> str:
 
 def list_channel_videos(url: str, limit: int) -> list[dict]:
     channel_url = normalize_channel_url(url)
-    options = {
-        "extract_flat": "in_playlist",
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "playlistend": limit,
-        "ignoreerrors": True,
-    }
+    options = _with_cookies(
+        {
+            "extract_flat": "in_playlist",
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "playlistend": limit,
+            "ignoreerrors": True,
+        }
+    )
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(channel_url, download=False)
@@ -103,12 +108,14 @@ def list_channel_videos(url: str, limit: int) -> list[dict]:
 
 def max_video_height(video_id: str) -> int | None:
     """Highest video-stream height YouTube offers for this id. None if unknown."""
-    options = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "noplaylist": True,
-    }
+    options = _with_cookies(
+        {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "noplaylist": True,
+        }
+    )
     url = f"https://www.youtube.com/watch?v={video_id}"
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
@@ -251,6 +258,7 @@ def _ytdlp_command(
         "yt_dlp",
         "--no-playlist",
         "--no-warnings",
+        *_cookies_args(),
         *extra,
         "-f",
         _format_selector(output_4k),
@@ -305,6 +313,50 @@ def _format_selector(output_4k: bool) -> str:
         "bv*[height<=1080][vcodec^=avc1]+ba[acodec^=mp4a]/"
         "bv*[height<=1080]+ba/b[height<=1080]/b"
     )
+
+
+def _with_cookies(options: dict) -> dict:
+    cookiefile = _cookiefile()
+    if cookiefile:
+        options["cookiefile"] = cookiefile
+    return options
+
+
+def _cookies_args() -> list[str]:
+    cookiefile = _cookiefile()
+    if not cookiefile:
+        return []
+    return ["--cookies", cookiefile]
+
+
+def _cookiefile() -> str | None:
+    """Netscape cookies for YouTube, if the operator supplied them.
+
+    YTDLP_COOKIES_FILE is a path. YTDLP_COOKIES is the file contents, or the
+    same contents encoded as base64. Nothing is read from a browser.
+    """
+    configured = os.environ.get("YTDLP_COOKIES_FILE", "").strip()
+    if configured:
+        path = Path(configured)
+        if not path.is_file():
+            raise RuntimeError("YTDLP_COOKIES_FILE does not point at a cookies file")
+        return str(path)
+
+    raw = os.environ.get("YTDLP_COOKIES", "").strip()
+    if not raw:
+        return None
+    if "\\n" in raw and "\n" not in raw:
+        raw = raw.replace("\\n", "\n")
+    text = raw
+    if "youtube.com" not in raw and not raw.startswith("#"):
+        try:
+            text = base64.b64decode(raw, validate=True).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            text = raw
+    dest = Path(tempfile.gettempdir()) / "compcreator-youtube-cookies.txt"
+    dest.write_text(text if text.endswith("\n") else text + "\n")
+    dest.chmod(0o600)
+    return str(dest)
 
 
 def _thumbnail(entry: dict, video_id: str) -> str | None:
