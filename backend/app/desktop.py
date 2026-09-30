@@ -23,6 +23,20 @@ from fastapi.staticfiles import StaticFiles
 log = logging.getLogger("compcreator.desktop")
 
 
+def ensure_stdio() -> None:
+    """Give a windowed build streams that uvicorn can configure.
+
+    PyInstaller ``--windowed`` on Windows leaves ``sys.stdout`` and
+    ``sys.stderr`` as ``None``. Uvicorn's default formatter calls
+    ``isatty()`` on stdout while building the ``default`` formatter, and
+    that exits the program before the window opens.
+    """
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
+
 def app_support_dir() -> Path:
     if sys.platform == "darwin":
         base = Path.home() / "Library" / "Application Support" / "CompCreator"
@@ -125,6 +139,7 @@ def _wait_until_ready(url: str, timeout: float = 30) -> None:
 
 
 def main() -> None:
+    ensure_stdio()
     log_path = prepare_environment()
     logging.basicConfig(
         filename=log_path,
