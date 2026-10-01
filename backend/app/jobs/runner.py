@@ -51,6 +51,17 @@ class Runner:
         for pid in pids:
             _kill_group(pid)
 
+    def cancel_all(self) -> None:
+        """Cancel every running export, as ``cancel`` does for one.
+
+        The desktop app calls this when its window closes. Children run in
+        their own process groups, so they would otherwise outlive the app.
+        """
+        with self._lock:
+            live = list(self._live)
+        for job_id in live:
+            self.cancel(job_id)
+
     def forget(self, job_id: str) -> None:
         """Drop the cancel flag and process list of a finished export."""
         with self._lock:
