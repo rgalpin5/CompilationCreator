@@ -4,7 +4,7 @@
 
 type StringStorage = Pick<Storage, "getItem" | "setItem">;
 
-function browserStorage(): StringStorage | null {
+function browserStorage(): Storage | null {
   try {
     return typeof window === "undefined" ? null : window.localStorage;
   } catch {
@@ -12,8 +12,20 @@ function browserStorage(): StringStorage | null {
   }
 }
 
+/** This tab's storage, which the browser clears when the tab closes. */
+export function tabStorage(): Storage | null {
+  try {
+    return typeof window === "undefined" ? null : window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
 /** The stored string for ``key``, or ``null`` when storage is unavailable. */
-export function readStored(key: string, storage = browserStorage()): string | null {
+export function readStored(
+  key: string,
+  storage: StringStorage | null = browserStorage(),
+): string | null {
   if (!storage) return null;
   try {
     return storage.getItem(key);
@@ -23,12 +35,29 @@ export function readStored(key: string, storage = browserStorage()): string | nu
 }
 
 /** Remember ``value`` under ``key``. Returns ``false`` when storage refused it. */
-export function writeStored(key: string, value: string, storage = browserStorage()): boolean {
+export function writeStored(
+  key: string,
+  value: string,
+  storage: StringStorage | null = browserStorage(),
+): boolean {
   if (!storage) return false;
   try {
     storage.setItem(key, value);
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Forget ``key``. Storage that is missing or throws is left alone. */
+export function removeStored(
+  key: string,
+  storage: Pick<Storage, "removeItem"> | null = browserStorage(),
+): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(key);
+  } catch {
+    // Nothing was stored, or the browser blocks site data.
   }
 }

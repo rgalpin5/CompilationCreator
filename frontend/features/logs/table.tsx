@@ -33,7 +33,7 @@ export function SortButton({
   return (
     <button type="button" onClick={onClick} className="uppercase">
       {children}
-      {active ? " •" : ""}
+      {active ? <span aria-hidden="true"> •</span> : null}
     </button>
   );
 }

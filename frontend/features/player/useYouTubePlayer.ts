@@ -183,7 +183,12 @@ export function useYouTubePlayer(videoId: string): YouTubePlayer {
         trustedIdRef.current = playingId;
         switchedAtRef.current = null;
         lastDurationRef.current = length;
-        setMeter({ id: playingId, playhead: time, duration: length });
+        // Returning the same object skips the render while nothing moved.
+        setMeter((prev) =>
+          prev.id === playingId && prev.playhead === time && prev.duration === length
+            ? prev
+            : { id: playingId, playhead: time, duration: length },
+        );
       } catch (caught: unknown) {
         ignorePlayerTimingError(caught);
       }

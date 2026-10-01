@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ export default function PasswordGate({ children }: { children: ReactNode }) {
   // Why the last attempt failed, shown under the field.
   const [problem, setProblem] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const problemId = useId();
 
   useEffect(() => {
     let current = true;
@@ -83,15 +84,20 @@ export default function PasswordGate({ children }: { children: ReactNode }) {
                 value={password}
                 disabled={submitting}
                 aria-invalid={problem ? true : undefined}
+                aria-describedby={problem ? problemId : undefined}
                 onChange={(event) => {
                   setPassword(event.target.value);
                   setProblem(null);
                 }}
               />
             </label>
-            {problem && <p className="text-sm text-destructive">{problem}</p>}
+            {problem && (
+              <p id={problemId} role="alert" className="text-sm text-destructive">
+                {problem}
+              </p>
+            )}
             <p className="text-sm text-muted-foreground">
-              This browser remembers the password once it works.
+              This tab remembers the password until you close it.
             </p>
             <Button type="submit" disabled={submitting || !password.trim()}>
               {submitting ? "Checking…" : "Continue"}

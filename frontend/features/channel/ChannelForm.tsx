@@ -38,8 +38,14 @@ export default function ChannelForm({ loading, error, onSubmit }: Props) {
           {loading ? "Loading…" : "Load videos"}
         </Button>
       </div>
-      {loading && <p className="text-sm text-muted-foreground">Fetching videos…</p>}
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      <p role="status" className="text-sm text-muted-foreground empty:hidden">
+        {loading ? "Fetching videos…" : ""}
+      </p>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

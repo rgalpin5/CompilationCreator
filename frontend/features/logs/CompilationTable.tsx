@@ -54,7 +54,10 @@ export default function CompilationTable({ compilations }: Props) {
         <thead>
           <tr className="text-left text-xs tracking-wide text-muted-foreground uppercase">
             <th className="px-2 py-2 font-medium">Name</th>
-            <th className="px-2 py-2 font-medium">
+            <th
+              className="px-2 py-2 font-medium"
+              aria-sort={compilationSort === "newest" ? "descending" : "ascending"}
+            >
               <SortButton
                 active
                 onClick={() =>
