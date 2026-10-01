@@ -48,7 +48,7 @@ export default function Timeline({ clips, disabled, onRemove, onMove }: Props) {
                     type="button"
                     size="icon-sm"
                     variant="outline"
-                    aria-label="Move up"
+                    aria-label={`Move ${clip.title} up`}
                     disabled={disabled || i === 0}
                     onClick={() => onMove(i, -1)}
                   >
@@ -58,7 +58,7 @@ export default function Timeline({ clips, disabled, onRemove, onMove }: Props) {
                     type="button"
                     size="icon-sm"
                     variant="outline"
-                    aria-label="Move down"
+                    aria-label={`Move ${clip.title} down`}
                     disabled={disabled || i === clips.length - 1}
                     onClick={() => onMove(i, 1)}
                   >
@@ -68,6 +68,7 @@ export default function Timeline({ clips, disabled, onRemove, onMove }: Props) {
                     type="button"
                     size="sm"
                     variant="destructive"
+                    aria-label={`Remove ${clip.title}`}
                     disabled={disabled}
                     onClick={() => onRemove(i)}
                   >
