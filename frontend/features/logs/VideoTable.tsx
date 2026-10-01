@@ -70,12 +70,18 @@ export default function VideoTable({ videos }: Props) {
             <th className="px-2 py-2 font-medium">Channel</th>
             <th className="px-2 py-2 font-medium">Views</th>
             <th className="px-2 py-2 font-medium">Length</th>
-            <th className="px-2 py-2 font-medium">
+            <th
+              className="px-2 py-2 font-medium"
+              aria-sort={videoSort === "last_used" ? "descending" : "none"}
+            >
               <SortButton active={videoSort === "last_used"} onClick={() => setVideoSort("last_used")}>
                 Last used
               </SortButton>
             </th>
-            <th className="px-2 py-2 text-right font-medium">
+            <th
+              className="px-2 py-2 text-right font-medium"
+              aria-sort={videoSort === "used" ? "descending" : "none"}
+            >
               <SortButton active={videoSort === "used"} onClick={() => setVideoSort("used")}>
                 Used
               </SortButton>
