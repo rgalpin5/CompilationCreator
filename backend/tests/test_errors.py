@@ -60,17 +60,16 @@ class DirectoryTests(unittest.TestCase):
 
 class EnvFileFailureTests(unittest.TestCase):
     def test_unreadable_file_names_the_path(self) -> None:
-        if not hasattr(Path, "chmod"):
-            self.skipTest("chmod is required")
+        # chmod cannot make a file unreadable on Windows, so the denial is simulated.
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / ".env"
             path.write_text("JOBS_DIR=/tmp/jobs\n", encoding="utf-8")
-            path.chmod(0)
-            try:
-                with self.assertRaises(ConfigurationError) as caught:
-                    load_env_file(path, {})
-            finally:
-                path.chmod(0o600)
+            denied = PermissionError(13, "Permission denied", str(path))
+            with (
+                patch.object(Path, "read_text", side_effect=denied),
+                self.assertRaises(ConfigurationError) as caught,
+            ):
+                load_env_file(path, {})
         message = str(caught.exception)
         self.assertIn("Permission denied", message)
         self.assertIn(str(path), message)

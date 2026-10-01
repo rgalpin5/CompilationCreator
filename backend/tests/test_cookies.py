@@ -66,6 +66,7 @@ class CookieSelectionTests(unittest.TestCase):
             _with_cookies({})
         self.assertIn("Deno", str(raised.exception))
 
+    @unittest.skipIf(sys.platform == "win32", "Homebrew locations are searched on macOS and Linux")
     def test_deno_path_finds_homebrew_when_missing_from_path(self) -> None:
         def access(path: object, _mode: int) -> bool:
             return str(path) == _DENO

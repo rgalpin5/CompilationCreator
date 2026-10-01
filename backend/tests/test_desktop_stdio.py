@@ -23,11 +23,13 @@ class WindowedStdioTests(unittest.TestCase):
             ensure_stdio()
             self.assertIsNotNone(sys.stdout)
             self.assertIsNotNone(sys.stderr)
-            assert sys.stdout is not None
-            assert sys.stderr is not None
-            self.assertFalse(sys.stdout.isatty())
-            self.assertFalse(sys.stderr.isatty())
+            # Building the config sets up uvicorn's logging, which is the step
+            # that used to exit a windowed build. Windows reports its null
+            # device as a terminal, so isatty() is not checked here.
             uvicorn.Config(lambda: None, host="127.0.0.1", port=1, log_level="info")
         finally:
+            for stream in (sys.stdout, sys.stderr):
+                if stream is not None and stream not in (stdout, stderr):
+                    stream.close()
             sys.stdout = stdout
             sys.stderr = stderr

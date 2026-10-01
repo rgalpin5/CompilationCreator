@@ -4,6 +4,7 @@ import contextvars
 import os
 import signal
 import subprocess
+import sys
 import threading
 import time
 
@@ -130,6 +131,10 @@ def _kill_windows_tree(pid: int) -> None:
 
 
 def _kill_posix_group(pid: int) -> None:
+    if sys.platform == "win32":
+        # Callers use _kill_windows_tree there. This also tells mypy that the
+        # POSIX-only calls below never run on Windows.
+        return
     try:
         os.killpg(pid, signal.SIGTERM)
     except ProcessLookupError:

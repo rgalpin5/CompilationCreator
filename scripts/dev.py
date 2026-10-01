@@ -136,6 +136,8 @@ def cmd_lint() -> None:
         cwd=BACKEND,
     )
     _run([str(python), "-m", "mypy"], cwd=BACKEND)
+    # mypy only checks the sys.platform branch it runs on, so check Windows too.
+    _run([str(python), "-m", "mypy", "--platform", "win32"], cwd=BACKEND)
     _run(
         [
             str(python),

@@ -58,7 +58,10 @@ def _deno_path() -> str | None:
     if found:
         return found
     name = "deno.exe" if sys.platform == "win32" else "deno"
-    candidates = [Path.home() / ".deno" / "bin" / name]
+    candidates: list[Path] = []
+    # No home directory (HOME/USERPROFILE unset) just skips this place.
+    with contextlib.suppress(RuntimeError):
+        candidates.append(Path.home() / ".deno" / "bin" / name)
     if sys.platform == "win32":
         local = os.environ.get("LOCALAPPDATA", "")
         if local:

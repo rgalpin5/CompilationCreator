@@ -7,6 +7,8 @@ from pathlib import Path
 
 def detect_browser() -> str | None:
     """A browser on this machine that yt-dlp knows how to read cookies from."""
+    # Declared up front: mypy only checks the branch for the platform it runs on.
+    candidates: list[tuple[str, Path]]
     if sys.platform == "darwin":
         candidates = [
             ("chrome", Path("/Applications/Google Chrome.app")),
