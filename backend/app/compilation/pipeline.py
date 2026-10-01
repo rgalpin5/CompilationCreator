@@ -235,10 +235,17 @@ def _finish(
         error=None,
         output_path=str(output),
     )
-    if runner.is_cancelled(job_id):
+    if _cancelled_in_store(store, job_id):
         # Cancel arrived after the last checkpoint. The ready update was
-        # ignored, so the finished file would otherwise stay on disk.
+        # ignored, so the finished file would otherwise stay on disk. The store
+        # is checked rather than the runner because the cancel route marks the
+        # store first and may not have reached the runner yet.
         shutil.rmtree(job_dir, ignore_errors=True)
+
+
+def _cancelled_in_store(store: JobStore, job_id: str) -> bool:
+    job = store.get(job_id)
+    return job is not None and job["status"] == "cancelled"
 
 
 def run_compilation(
@@ -253,15 +260,49 @@ def run_compilation(
     The job record is updated as the work moves from downloading to ready.
     Cancellation deletes the working folder. A missing program, a denied
     permission, a bad setting, or a media failure is stored on the job as a
-    short message and does not leave a traceback in that message.
+    short message and does not leave a traceback in that message. The store
+    is told when this returns, so the next export can start.
     """
-    job = store.get(job_id)
-    if not job:
-        return
-    job_dir = Path(job["dir"])
-    ordered = sorted(clips, key=lambda clip: clip.order)
-    token = runner.bind(job_id)
+    try:
+        _run(store, job_id, clips, output_4k, usage)
+    finally:
+        store.worker_stopped(job_id)
 
+
+def _run(
+    store: JobStore,
+    job_id: str,
+    clips: list[Clip],
+    output_4k: bool,
+    usage: UsageStore | None,
+) -> None:
+    # Bind before reading the job. A cancel that reaches the runner before
+    # this bind is ignored there, but it marked the store first, so the read
+    # below sees it.
+    token = runner.bind(job_id)
+    try:
+        job = store.get(job_id)
+        if not job:
+            return
+        job_dir = Path(job["dir"])
+        if job["status"] == "cancelled":
+            shutil.rmtree(job_dir, ignore_errors=True)
+            return
+        _export(store, job_id, clips, job_dir, output_4k, usage)
+    finally:
+        runner.unbind(token)
+        runner.forget(job_id)
+
+
+def _export(
+    store: JobStore,
+    job_id: str,
+    clips: list[Clip],
+    job_dir: Path,
+    output_4k: bool,
+    usage: UsageStore | None,
+) -> None:
+    ordered = sorted(clips, key=lambda clip: clip.order)
     try:
         raws = _download_all(store, job_id, ordered, job_dir, output_4k)
         parts = _prepare_all(store, job_id, raws, job_dir, output_4k)
@@ -294,6 +335,3 @@ def run_compilation(
             progress="Failed",
             error="The export stopped because of an internal error.",
         )
-    finally:
-        runner.unbind(token)
-        runner.forget(job_id)

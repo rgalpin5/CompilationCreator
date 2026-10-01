@@ -49,6 +49,7 @@
           "channel": {
             "anyOf": [
               {
+                "maxLength": 1000,
                 "type": "string"
               },
               {
@@ -70,6 +71,7 @@
             "title": "Duration Seconds"
           },
           "end": {
+            "maxLength": 20,
             "title": "End",
             "type": "string"
           },
@@ -79,12 +81,14 @@
             "type": "integer"
           },
           "start": {
+            "maxLength": 20,
             "title": "Start",
             "type": "string"
           },
           "thumbnail": {
             "anyOf": [
               {
+                "maxLength": 2000,
                 "type": "string"
               },
               {
@@ -95,6 +99,7 @@
           },
           "title": {
             "default": "Untitled",
+            "maxLength": 1000,
             "title": "Title",
             "type": "string"
           },
@@ -158,6 +163,7 @@
             "items": {
               "$ref": "#/components/schemas/Clip"
             },
+            "maxItems": 1000,
             "minItems": 1,
             "title": "Clips",
             "type": "array"
@@ -172,6 +178,19 @@
           "clips"
         ],
         "title": "CompilationRequest",
+        "type": "object"
+      },
+      "DownloadFolder": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "DownloadFolder",
         "type": "object"
       },
       "DownloadRequest": {
@@ -189,6 +208,20 @@
           }
         },
         "title": "DownloadRequest",
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "description": "The body of every error the API raises itself: one sentence a person can read.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorDetail",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -282,6 +315,35 @@
           "saved_path"
         ],
         "title": "JobStatus",
+        "type": "object"
+      },
+      "Ok": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "Ok",
+        "type": "object"
+      },
+      "UsageCounts": {
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          }
+        },
+        "required": [
+          "counts"
+        ],
+        "title": "UsageCounts",
         "type": "object"
       },
       "UsageLogs": {
@@ -569,6 +631,26 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The request is invalid"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The server's password is missing or wrong"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -578,6 +660,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Too many wrong passwords from this client"
           }
         },
         "summary": "Read Channel"
@@ -608,6 +700,36 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The request is invalid"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The server's password is missing or wrong"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The job is in the wrong state for this request"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -617,6 +739,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Too many wrong passwords from this client"
           }
         },
         "summary": "Create Compilation"
@@ -648,6 +780,26 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The server's password is missing or wrong"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "No such job, or its file is not ready"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -657,6 +809,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Too many wrong passwords from this client"
           }
         },
         "summary": "Compilation Status"
@@ -688,6 +850,36 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The server's password is missing or wrong"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "No such job, or its file is not ready"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The job is in the wrong state for this request"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -697,6 +889,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Too many wrong passwords from this client"
           }
         },
         "summary": "Cancel Compilation"
@@ -745,6 +947,46 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The request is invalid"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The server's password is missing or wrong"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "No such job, or its file is not ready"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The job is in the wrong state for this request"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -754,6 +996,26 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Too many wrong passwords from this client"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The server could not finish the request"
           }
         },
         "summary": "Download Compilation"
@@ -777,11 +1039,29 @@
         "responses": {
           "200": {
             "content": {
+              "video/mp4": {}
+            },
+            "description": "The finished MP4"
+          },
+          "401": {
+            "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "The server's password is missing or wrong"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "No such job, or its file is not ready"
           },
           "422": {
             "content": {
@@ -792,6 +1072,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Too many wrong passwords from this client"
           }
         },
         "summary": "Compilation File"
@@ -806,15 +1096,31 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Download Folder Api Download Folder Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DownloadFolder"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The server's password is missing or wrong"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Too many wrong passwords from this client"
           }
         },
         "summary": "Download Folder"
@@ -834,6 +1140,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The server's password is missing or wrong"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Too many wrong passwords from this client"
           }
         },
         "summary": "Read Logs"
@@ -848,15 +1174,31 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "boolean"
-                  },
-                  "title": "Response Session Api Session Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Ok"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The server's password is missing or wrong"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Too many wrong passwords from this client"
           }
         },
         "summary": "Session"
@@ -883,18 +1225,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "additionalProperties": {
-                      "type": "integer"
-                    },
-                    "type": "object"
-                  },
-                  "title": "Response Read Usage Api Usage Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/UsageCounts"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "The server's password is missing or wrong"
           },
           "422": {
             "content": {
@@ -905,6 +1250,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Too many wrong passwords from this client"
           }
         },
         "summary": "Read Usage"
@@ -919,11 +1274,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "boolean"
-                  },
-                  "title": "Response Health Health Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Ok"
                 }
               }
             },

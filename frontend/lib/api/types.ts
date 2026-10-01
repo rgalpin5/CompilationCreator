@@ -11,6 +11,9 @@ export type ClipPayload = Schemas["Clip"];
 export type VideoLog = Schemas["UsageVideo"];
 export type CompilationLog = Schemas["CompilationEntry"];
 export type Logs = Schemas["UsageLogs"];
+export type UsageCounts = Schemas["UsageCounts"];
+export type DownloadFolder = Schemas["DownloadFolder"];
+export type Ok = Schemas["Ok"];
 /** An export job. ``file_url`` is set on hosted deploys, where the browser downloads the MP4 itself. */
 export type Job = Schemas["JobStatus"];
 export type JobStatus = Job["status"];

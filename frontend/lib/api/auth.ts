@@ -10,6 +10,14 @@ export class UnauthorizedError extends Error {
   }
 }
 
+/** Thrown when the API answers 429: this browser sent too many wrong passwords. */
+export class TooManyAttemptsError extends Error {
+  constructor(message = "Too many wrong passwords. Try again later.") {
+    super(message);
+    this.name = "TooManyAttemptsError";
+  }
+}
+
 /** The password remembered in this browser for a hosted API, if any. */
 export function storedPassword(): string | null {
   return readStored(PASSWORD_KEY);

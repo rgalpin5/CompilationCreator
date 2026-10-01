@@ -27,6 +27,7 @@ class CancelTests(unittest.TestCase):
     def test_windows_cancel_kills_the_process_tree(self) -> None:
         jobs = Runner()
         with jobs._lock:
+            jobs._live.add("job-1")
             jobs._pids["job-1"] = {4321}
         with (
             patch("app.jobs.runner.os.name", "nt"),
@@ -51,10 +52,23 @@ class CancelTests(unittest.TestCase):
 
     def test_forget_clears_a_finished_job(self) -> None:
         jobs = Runner()
+        token = jobs.bind("job-1")
+        jobs.unbind(token)
         jobs.cancel("job-1")
         self.assertTrue(jobs.is_cancelled("job-1"))
         jobs.forget("job-1")
         self.assertFalse(jobs.is_cancelled("job-1"))
+
+    def test_cancel_ignores_an_export_that_is_not_running(self) -> None:
+        jobs = Runner()
+        jobs.cancel("never-started")
+        token = jobs.bind("job-1")
+        jobs.unbind(token)
+        jobs.forget("job-1")
+        jobs.cancel("job-1")
+        self.assertFalse(jobs.is_cancelled("never-started"))
+        self.assertFalse(jobs.is_cancelled("job-1"))
+        self.assertEqual(jobs._cancelled, set())
 
 
 if __name__ == "__main__":

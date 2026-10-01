@@ -1,5 +1,5 @@
 import { API_BASE, request } from "./client";
-import type { ClipPayload, Job } from "./types";
+import type { ClipPayload, DownloadFolder, Job } from "./types";
 
 /** Absolute link for a job's ``file_url``, which the browser downloads directly. */
 export function compilationFileHref(fileUrl: string): string {
@@ -28,7 +28,7 @@ export function cancelCompilation(id: string): Promise<Job> {
 
 /** The folder the server uses when the save field is left blank. */
 export function fetchDownloadFolder(): Promise<string> {
-  return request<{ path: string }>("/api/download-folder").then((data) => data.path);
+  return request<DownloadFolder>("/api/download-folder").then((data) => data.path);
 }
 
 /** Copy a finished export into ``directory``, or into Downloads when it is blank. */

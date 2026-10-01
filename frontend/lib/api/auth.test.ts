@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { UnauthorizedError, authHeaders } from "./auth";
+import { TooManyAttemptsError, UnauthorizedError, authHeaders } from "./auth";
 
 describe("authHeaders", () => {
   it("sends a bearer header when a password is known", () => {
@@ -19,5 +19,14 @@ describe("UnauthorizedError", () => {
     const error = new UnauthorizedError();
     expect(error).toBeInstanceOf(Error);
     expect(error.message).toBe("This server needs its password.");
+  });
+});
+
+describe("TooManyAttemptsError", () => {
+  it("is an Error that keeps the server's message", () => {
+    const error = new TooManyAttemptsError("Too many wrong passwords. Try again in 15 minutes.");
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(UnauthorizedError);
+    expect(error.message).toBe("Too many wrong passwords. Try again in 15 minutes.");
   });
 });

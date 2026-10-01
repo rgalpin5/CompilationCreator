@@ -273,7 +273,7 @@ class LocalWorkflowTests(unittest.TestCase):
             )
 
             counts = usage_routes.read_usage(f"{_INTRO},{_OUTRO}", usage)
-            self.assertEqual(counts["counts"], {_INTRO: 1, _OUTRO: 1})
+            self.assertEqual(counts.counts, {_INTRO: 1, _OUTRO: 1})
             logs = usage_routes.read_logs(usage)
             self.assertEqual(len(logs["compilations"]), 1)
             self.assertEqual(logs["compilations"][0]["clips"], 2)
