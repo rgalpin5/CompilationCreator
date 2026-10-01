@@ -39,17 +39,14 @@ def probe_layout(path: Path) -> StreamLayout | None:
         "json",
         str(path),
     ]
-    try:
-        result = subprocess.run(command, capture_output=True, text=True, check=False)
-    except FileNotFoundError as exc:
-        raise ConfigurationError(
-            "ffprobe was not found. Install ffmpeg and make sure it is on PATH."
-        ) from exc
+    result = _ffprobe(command)
     if result.returncode != 0:
         return None
     try:
         payload: Any = json.loads(result.stdout)
     except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
         return None
     streams = payload.get("streams") or []
     video = next((stream for stream in streams if stream.get("codec_type") == "video"), None)
@@ -82,10 +79,20 @@ def _probe_duration(path: Path) -> float | None:
         "default=noprint_wrappers=1:nokey=1",
         str(path),
     ]
-    result = runner.run(command)
+    result = _ffprobe(command)
     if result.returncode != 0:
         return None
     try:
         return float((result.stdout or "").strip())
     except ValueError:
         return None
+
+
+def _ffprobe(command: list[str]) -> subprocess.CompletedProcess[str]:
+    # Through the runner, so cancelling an export also stops a slow or stuck probe.
+    try:
+        return runner.run(command)
+    except FileNotFoundError as exc:
+        raise ConfigurationError(
+            "ffprobe was not found. Install ffmpeg and make sure it is on PATH."
+        ) from exc

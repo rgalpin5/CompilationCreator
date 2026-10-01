@@ -110,10 +110,6 @@ def _local_media_tool(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
 
-def _refuse_ffprobe(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-    raise AssertionError("ffprobe was started")
-
-
 def _same_layout(_path: Path) -> StreamLayout:
     return _LAYOUT
 
@@ -155,7 +151,6 @@ def _quiet_network() -> Iterator[None]:
     with (
         patch.dict(os.environ, hidden),
         patch("app.youtube.client.yt_dlp.YoutubeDL", _OfflineYoutubeDL),
-        patch("app.media.probe.subprocess.run", _refuse_ffprobe),
         patch.object(runner, "run", _local_media_tool),
     ):
         yield
