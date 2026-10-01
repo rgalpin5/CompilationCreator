@@ -1,6 +1,7 @@
 [project]
 name = "compcreator-backend"
 version = "0.1.0"
+description = "FastAPI service that lists a YouTube channel and joins selected clips into one MP4."
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115.0",
@@ -9,8 +10,77 @@ dependencies = [
   "pydantic>=2.9.0",
 ]
 
+# Lower bounds are intentional. yt-dlp has to move forward when YouTube changes,
+# so the runtime pins are not frozen to a lockfile. requirements.txt,
+# requirements-dev.txt, and packaging/requirements-desktop.txt must stay
+# identical to the lists below. backend/tests/test_dependencies.py checks that.
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.11.0",
+  "mypy>=1.15.0",
+]
+desktop = [
+  "pywebview>=5.4",
+  "pyinstaller>=6.11",
+]
+
 [tool.uv]
 package = false
 
-[tool.vercel]
-entrypoint = "app.main:app"
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["app", "tests"]
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "W",
+  "I",
+  "N",
+  "UP",
+  "B",
+  "A",
+  "C4",
+  "SIM",
+  "RUF",
+  "PIE",
+  "RET",
+  "ARG",
+]
+# Dimension text uses the multiplication sign on purpose. JobCancelled is a
+# control-flow signal, so the Error suffix would misname it.
+ignore = ["RUF001", "RUF002", "RUF003", "N818"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+"../packaging/entry.py" = ["E402"]
+# Test doubles keep the real parameter names, including unused ones.
+"tests/**" = ["ARG001", "ARG002"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app", "tests"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+strict_equality = true
+extra_checks = true
+show_error_codes = true
+pretty = true
+
+[[tool.mypy.overrides]]
+module = ["yt_dlp", "yt_dlp.*", "webview"]
+ignore_missing_imports = true

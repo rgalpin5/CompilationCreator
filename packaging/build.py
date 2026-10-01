@@ -189,7 +189,10 @@ def _venv_tool(name: str) -> Path:
         tool = VENV / "bin" / name
     if not python.exists():
         _run([sys.executable, "-m", "venv", str(VENV)])
-    _run([str(python), "-m", "pip", "install", "-r", str(ROOT / "packaging" / "requirements-desktop.txt")])
+    requirements = ROOT / "packaging" / "requirements-desktop.txt"
+    _run([str(python), "-m", "pip", "install", "-r", str(requirements)])
+    # A reused build/venv would otherwise keep the yt-dlp it first installed.
+    _run([str(python), "-m", "pip", "install", "--upgrade", "yt-dlp"])
     if not tool.exists():
         raise SystemExit(f"{name} was not installed into {VENV}.")
     return tool

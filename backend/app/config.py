@@ -1,16 +1,22 @@
 import os
 from pathlib import Path
 
+from app.envfile import load_env_file
+from app.errors import ConfigurationError, stop_for_local_error
+
 DEFAULT_VIDEO_LIMIT = 24
 MAX_VIDEO_LIMIT = 50
-# A mega compilation is 4–8 videos of about 20–30 minutes.
-# 35 minutes leaves room for a video that runs slightly past 30:00.
-MAX_CLIPS = 8
-MAX_CLIP_SECONDS = 35 * 60
-MAX_TOTAL_SECONDS = MAX_CLIPS * MAX_CLIP_SECONDS
+
+# backend/app/config.py -> repository root. Hosted deploys usually have no
+# file here, and values already present in the environment are left alone.
+try:
+    load_env_file(Path(__file__).resolve().parents[2] / ".env", os.environ)
+except ConfigurationError as exc:
+    stop_for_local_error(exc)
 
 
 def _default_jobs_dir() -> Path:
+    """Jobs folder for this process: ``JOBS_DIR``, or a writable default."""
     # Vercel bundles the app on a read-only filesystem. /tmp is writable.
     if os.environ.get("VERCEL"):
         return Path("/tmp/compcreator/jobs")
@@ -19,9 +25,18 @@ def _default_jobs_dir() -> Path:
 
 
 class Settings:
+    """Paths and origins read once from the environment."""
+
     def __init__(self) -> None:
+        """Read ``JOBS_DIR``, ``CORS_ORIGINS``, and ``VERCEL``, using local defaults when unset."""
         jobs = os.environ.get("JOBS_DIR")
         self.jobs_dir = Path(jobs) if jobs else _default_jobs_dir()
+        # A hosted deploy serves anyone who can reach it, so the caller must
+        # not choose where on the server a file is written. The finished video
+        # goes to the browser instead. Vercel sets VERCEL; Cloud Run sets K_SERVICE.
+        self.hosted = bool(os.environ.get("VERCEL") or os.environ.get("K_SERVICE"))
+        # Required on a hosted server; see app/auth.py.
+        self.password = os.environ.get("COMPCREATOR_PASSWORD") or None
         origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
         self.cors_origins = [item.strip() for item in origins.split(",") if item.strip()]
 

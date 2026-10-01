@@ -3,14 +3,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.services.ffmpeg_service import (
-    StreamLayout,
-    concat_clips,
-    layouts_match,
-    prep_plan,
-    probe_layout,
-)
-from app.services.ytdlp_service import use_concurrent_download
+from app.media.concat import concat_clips
+from app.media.plan import fit_4k, layouts_match, prep_plan
+from app.media.probe import StreamLayout, probe_layout
+from app.youtube.download import use_concurrent_download
 
 
 def _clip(path: Path, size: str) -> None:
@@ -75,7 +71,9 @@ class StreamCopyTests(unittest.TestCase):
             joined = probe_layout(output)
             self.assertIsNotNone(joined)
             assert joined is not None
-            self.assertEqual(joined.video_codec, layouts[0].video_codec)
+            first_layout = layouts[0]
+            assert first_layout is not None
+            self.assertEqual(joined.video_codec, first_layout.video_codec)
             self.assertEqual((joined.width, joined.height), (320, 240))
 
     def test_different_sizes_do_not_match(self) -> None:
@@ -106,6 +104,12 @@ class PrepPlanTests(unittest.TestCase):
     def test_ntsc_and_integer_frame_rate_share_bucket(self) -> None:
         layouts = [_layout(frame_rate="30/1"), _layout(frame_rate="30000/1001")]
         self.assertEqual(self._modes(layouts), ["keep", "keep"])
+
+    def test_4k_export_scales_smaller_clips_and_keeps_real_4k(self) -> None:
+        layouts = [_layout(height=2160), _layout(height=1080)]
+        plan = fit_4k(prep_plan(layouts), layouts)
+        self.assertEqual([prep.mode for prep in plan], ["keep", "video"])
+        self.assertTrue(all((prep.width, prep.height) == (3840, 2160) for prep in plan))
 
 
 class ConcurrentDownloadTests(unittest.TestCase):

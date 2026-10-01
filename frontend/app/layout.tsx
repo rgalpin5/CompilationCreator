@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CompCreator",
   description:
-    "Build a mega video from 4–8 YouTube videos, about 20–30 minutes each.",
+    "Build a compilation from YouTube videos.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

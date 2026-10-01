@@ -5,6 +5,7 @@ __pycache__/
 venv/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 *.egg-info/
 
 # Jobs and downloaded media
@@ -26,9 +27,7 @@ frontend/.env.local
 !.env.example
 
 # Desktop packages
-/dist/*
-!/dist/CompCreator-mac.dmg
-!/dist/CompCreator-windows.exe
+/dist/
 /build/
 /packaging/vendor/
 
@@ -39,3 +38,6 @@ frontend/.env.local
 
 # Local audit notes
 COMPCREATOR_AUDIT.md
+
+# Claude Code local state
+.claude/

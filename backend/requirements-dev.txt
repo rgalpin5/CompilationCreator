@@ -1,0 +1,4 @@
+# Lint and typecheck tools. Keep these lines identical to
+# [project.optional-dependencies] dev in pyproject.toml.
+ruff>=0.11.0
+mypy>=1.15.0

@@ -1,3 +1,6 @@
+# Runtime packages. Keep these lines identical to [project.dependencies]
+# in pyproject.toml. Lower bounds are intentional: yt-dlp must stay free to
+# update when YouTube changes. backend/tests/test_dependencies.py enforces this.
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 yt-dlp>=2025.9.26

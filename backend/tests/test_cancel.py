@@ -3,7 +3,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from app.services.runner import JobCancelled, Runner, _popen_group_kwargs
+from app.jobs.runner import JobCancelled, Runner, _popen_group_kwargs
 
 
 class CancelTests(unittest.TestCase):
@@ -11,6 +11,7 @@ class CancelTests(unittest.TestCase):
         jobs = Runner()
         token = jobs.bind("job-1")
         try:
+
             def stop() -> None:
                 time.sleep(0.3)
                 jobs.cancel("job-1")
@@ -28,10 +29,10 @@ class CancelTests(unittest.TestCase):
         with jobs._lock:
             jobs._pids["job-1"] = {4321}
         with (
-            patch("app.services.runner.os.name", "nt"),
-            patch("app.services.runner.subprocess.run") as run,
+            patch("app.jobs.runner.os.name", "nt"),
+            patch("app.jobs.runner.subprocess.run") as run,
             patch(
-                "app.services.runner.os.killpg",
+                "app.jobs.runner.os.killpg",
                 side_effect=AttributeError("module 'os' has no attribute 'killpg'"),
                 create=True,
             ),
@@ -43,10 +44,17 @@ class CancelTests(unittest.TestCase):
         self.assertEqual(command[4], "4321")
 
     def test_windows_popen_does_not_start_a_unix_session(self) -> None:
-        with patch("app.services.runner.os.name", "nt"):
+        with patch("app.jobs.runner.os.name", "nt"):
             kwargs = _popen_group_kwargs()
         self.assertNotIn("start_new_session", kwargs)
         self.assertIn("creationflags", kwargs)
+
+    def test_forget_clears_a_finished_job(self) -> None:
+        jobs = Runner()
+        jobs.cancel("job-1")
+        self.assertTrue(jobs.is_cancelled("job-1"))
+        jobs.forget("job-1")
+        self.assertFalse(jobs.is_cancelled("job-1"))
 
 
 if __name__ == "__main__":

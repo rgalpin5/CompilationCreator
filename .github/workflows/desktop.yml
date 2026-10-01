@@ -2,6 +2,10 @@ name: Desktop packages
 
 on:
   workflow_dispatch:
+  # Installers bundle the yt-dlp that was current when they were built. The
+  # weekly run rebuilds them only when a newer yt-dlp is out.
+  schedule:
+    - cron: "0 7 * * 1"
   push:
     tags:
       - "v*"
@@ -11,17 +15,51 @@ on:
       - "packaging/**"
       - "backend/**"
       - "frontend/**"
-      - ".gitattributes"
+      - ".github/workflows/desktop.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: desktop-packages
   cancel-in-progress: false
 
 jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+      ytdlp: ${{ steps.check.outputs.ytdlp }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=$(curl -fsSL https://pypi.org/pypi/yt-dlp/json | jq -r .info.version)
+          echo "ytdlp=$latest" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" != "schedule" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          notes=$(gh release view desktop-latest --json body -q .body 2>/dev/null || true)
+          if grep -qF "with yt-dlp $latest " <<<"$notes"; then
+            echo "desktop-latest already bundles yt-dlp $latest."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "yt-dlp $latest is newer than the published installers."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  checks:
+    needs: freshness
+    if: needs.freshness.outputs.build == 'true'
+    uses: ./.github/workflows/ci.yml
+
   package:
+    needs: checks
     strategy:
       fail-fast: false
       matrix:
@@ -29,9 +67,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -40,32 +75,56 @@ jobs:
           python-version: "3.12"
       - name: Build the desktop app
         run: python packaging/build.py
-      - name: Publish the installer
-        shell: bash
-        run: |
-          git lfs install --local
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          files=()
-          [ -f dist/CompCreator-mac.dmg ] && files+=(dist/CompCreator-mac.dmg)
-          [ -f dist/CompCreator-windows.exe ] && files+=(dist/CompCreator-windows.exe)
-          git add -- "${files[@]}"
-          if git diff --cached --quiet; then
-            echo "Installer already matches the repository."
-            exit 0
-          fi
-          git commit -m "Publish the desktop installer built on ${{ runner.os }}."
-          for attempt in 1 2 3 4 5; do
-            if git fetch origin main && git rebase origin/main && git push origin HEAD:main; then
-              exit 0
-            fi
-            git rebase --abort 2>/dev/null || true
-            sleep $((attempt * 10))
-          done
-          echo "Could not publish the installer."
-          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: compcreator-${{ matrix.os }}
-          path: dist/CompCreator-*
+          path: |
+            dist/CompCreator-mac.dmg
+            dist/CompCreator-windows.exe
           if-no-files-found: error
+
+  # Installers go to GitHub Releases instead of git, so the repository does not
+  # grow by a pair of installers on every build. Pushes to main and manual runs
+  # replace the assets on the rolling desktop-latest release; a v* tag also gets
+  # its own release. The weekly run publishes there too when it rebuilt.
+  release:
+    needs: [freshness, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      YTDLP: ${{ needs.freshness.outputs.ytdlp }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Publish to the rolling release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=desktop-latest
+          # The weekly run reads the yt-dlp version back from these notes.
+          notes="Built from ${GITHUB_SHA::7} with yt-dlp ${YTDLP} by run ${GITHUB_RUN_ID}."
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" \
+              --title "Desktop app (latest build)" --notes "$notes" --latest=false
+          fi
+          gh api -X PATCH "repos/$GH_REPO/git/refs/tags/$tag" \
+            -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          gh release edit "$tag" --notes "$notes"
+          gh release upload "$tag" installers/* --clobber
+      - name: Publish the tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" installers/* --clobber
+          else
+            gh release create "$tag" installers/* --verify-tag \
+              --title "CompCreator $tag" --generate-notes
+          fi
