@@ -1,3 +1,7 @@
 *.sh text eol=lf
 *.bat text eol=crlf
 Makefile text eol=lf
+
+# Generated API files are compared byte for byte, so keep LF on Windows too.
+frontend/lib/api/openapi.json text eol=lf
+frontend/lib/api/schema.gen.ts text eol=lf
