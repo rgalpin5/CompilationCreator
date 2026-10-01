@@ -71,7 +71,7 @@ The desktop app does not share a YouTube login. Each install reads cookies from 
 | API | Python 3.12, FastAPI, Pydantic v2, Uvicorn |
 | Media | yt-dlp, ffmpeg, ffprobe |
 | Desktop window | pywebview, packaged with PyInstaller |
-| Hosted deploy | Vercel services: Next.js frontend plus FastAPI backend, with `/api` and `/health` rewritten to the backend |
+| Hosted deploy | FastAPI on Cloud Run behind a shared password; the Next.js UI optionally on Vercel |
 | Local container | Docker Compose runs the backend only (`python:3.12-slim` plus ffmpeg) |
 
 Job state is in memory. Finished files and the usage log are on local disk. Nothing is shared across processes or instances. Restarting the API drops in-flight jobs. The usage file survives if `JOBS_DIR` does.
@@ -111,7 +111,7 @@ CompCreator/
   setup.sh                 macOS and Linux entry point
   setup.bat                Windows entry point
   docker-compose.yml       backend only
-  vercel.json              frontend and backend on one Vercel project
+  vercel.json              Next.js UI on Vercel (the API runs on Cloud Run)
   dist/                    desktop installers, when built
 ```
 
@@ -173,7 +173,7 @@ Frontend:
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_URL` | empty | Base URL of the API. Leave it unset on Vercel so the browser calls `/api` on the same origin. Set `http://localhost:8000` for split local development. The value is inlined at build time |
+| `NEXT_PUBLIC_API_URL` | empty | Base URL of the API. Set it to the Cloud Run URL for the Vercel UI, and to `http://localhost:8000` for split local development. Leave it empty when the UI and API share an origin, as in the desktop app. The value is inlined at build time |
 | `DESKTOP_EXPORT` | unset | `1` during `packaging/build.py`. Forces a static Next.js export and an empty API base so the window talks to the local server |
 
 Copy `.env.example` to `.env` in the repository root for the backend list. The API reads that file on startup and does not override variables already set in the environment. For the frontend, put values in `frontend/.env.local`. The setup scripts create both files when they are missing.
@@ -309,15 +309,11 @@ The `Desktop packages` GitHub Actions workflow builds both installers and commit
 
 ## Deploy
 
-### Vercel
+The hosted setup is the API on Cloud Run and, optionally, the UI on Vercel. Vercel does not host the API: its functions stop long exports and cannot send a finished video of typical size.
 
-`vercel.json` runs two services from one project. The frontend root is `frontend/` (Next.js). The backend root is `backend/` (FastAPI, entrypoint `app.main:app`). Rewrites send `/health` and `/api/*` to the backend and everything else to the frontend.
+### API on Cloud Run
 
-Leave `NEXT_PUBLIC_API_URL` unset so the browser calls `/api` on the same host. Set `YTDLP_COOKIES` or `YTDLP_COOKIES_FILE` in the project environment when YouTube requires a signed-in session. Do not commit cookie files. Finished videos are sent to the browser through `/api/compilations/{job_id}/file`. Job files on Vercel use `/tmp` and do not survive a new instance. The usage log sits next to `JOBS_DIR` (`usage.json`) and has the same lifetime.
-
-### Cloud Run (optional)
-
-The backend image can also be deployed on its own. Export work continues after the HTTP response, so CPU must stay allocated or the job freezes when the request ends.
+Export work continues after the HTTP response, so CPU must stay allocated or the job freezes when the request ends. Keep the password and any cookies in Secret Manager rather than in plain environment variables.
 
 ```bash
 cd backend
@@ -330,12 +326,17 @@ gcloud run deploy compcreator-api \
   --no-cpu-throttling \
   --max-instances 1 \
   --allow-unauthenticated \
+  --set-secrets "COMPCREATOR_PASSWORD=compcreator-password:latest" \
   --set-env-vars "CORS_ORIGINS=https://your-app.vercel.app"
 ```
 
-`--allow-unauthenticated` matches the app: there is no auth. Several origins need a custom gcloud delimiter because `--set-env-vars` splits on commas: `--set-env-vars "^;^CORS_ORIGINS=https://a.example,https://b.example"`. `--max-instances 1` keeps status polls and the save request on the instance that holds the job. In-memory jobs and local MP4s do not survive a restart, and they are not shared across instances. A later GCS signed-URL path is sketched in `backend/app/stubs/gcs_download.py` and is not wired up.
+Cloud Run sets `K_SERVICE`, which makes the API a hosted server: it refuses to start without `COMPCREATOR_PASSWORD`, sends finished videos to the browser through `/api/compilations/{job_id}/file`, and does not save into server folders. `--allow-unauthenticated` lets browsers reach the service; the password protects it. Add `YTDLP_COOKIES=<secret>:latest` to `--set-secrets` when YouTube requires a signed-in session, and never commit cookie files.
 
-If the frontend is hosted separately, set `NEXT_PUBLIC_API_URL` to the Cloud Run URL and redeploy the frontend. That variable is inlined at build time. The frontend origin must be listed in `CORS_ORIGINS`.
+`--max-instances 1` keeps status polls and the download on the instance that holds the job. In-memory jobs and local MP4s do not survive a restart and are not shared across instances. Several origins need a custom gcloud delimiter because `--set-env-vars` splits on commas: `--set-env-vars "^;^CORS_ORIGINS=https://a.example,https://b.example"`. A later GCS signed-URL path is sketched in `backend/app/stubs/gcs_download.py` and is not wired up.
+
+### UI on Vercel
+
+`vercel.json` deploys only the Next.js frontend (`frontend/`). In the Vercel project settings, set `NEXT_PUBLIC_API_URL` to the Cloud Run URL and redeploy; the value is inlined at build time. List the Vercel origin in the API's `CORS_ORIGINS`. The UI asks for the API password once and remembers it in that browser.
 
 ## Not wired up
 

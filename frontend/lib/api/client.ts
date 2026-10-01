@@ -1,10 +1,9 @@
 import { UnauthorizedError, authHeaders, storedPassword } from "./auth";
 
-// Same origin by default. Vercel rewrites `/api/*` and `/health` to the
-// backend service, and the API already mounts its routes under `/api`.
-// Set NEXT_PUBLIC_API_URL only when the API is on another origin, such as
-// `npm run dev` against uvicorn on port 8000. A service binding cannot
-// supply this value: every call below runs in the browser.
+// Same origin by default, as in the desktop app, where one process serves the
+// UI and the API. Set NEXT_PUBLIC_API_URL when the API is on another origin:
+// the Cloud Run URL for the Vercel UI, or uvicorn on port 8000 during
+// `npm run dev`. Every call below runs in the browser.
 const configured = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
 export const API_BASE = configured ? configured : "";
 

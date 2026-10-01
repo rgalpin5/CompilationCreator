@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-CompCreator is a personal tool with no auth. It lists a YouTube channel, lets the user pick and trim videos, and joins them into one MP4. It has a Next.js UI (`frontend/`) and a FastAPI backend (`backend/`) that uses yt-dlp in-process plus ffmpeg/ffprobe. The same code ships three ways: local dev, Vercel (two services in one project, see `vercel.json`), and a pywebview desktop app built by `packaging/build.py`. `README.md` is detailed and current, so check it for API shapes, env vars and deploy steps.
+CompCreator is a personal tool. It lists a YouTube channel, lets the user pick and trim videos, and joins them into one MP4. It has a Next.js UI (`frontend/`) and a FastAPI backend (`backend/`) that uses yt-dlp in-process plus ffmpeg/ffprobe. The same code ships three ways: local dev and a pywebview desktop app built by `packaging/build.py` (both without auth), and a hosted deploy with the API on Cloud Run and the UI on Vercel (`vercel.json` is UI-only). A hosted server (`VERCEL` or `K_SERVICE` set) requires `COMPCREATOR_PASSWORD` (`backend/app/auth.py`) and sends finished videos to the browser instead of saving into a server folder. `README.md` is detailed and current, so check it for API shapes, env vars and deploy steps.
 
 ## Commands
 
@@ -29,7 +29,7 @@ Backend tests use `unittest` (not pytest) and never touch YouTube or run ffmpeg;
 
 **Export is an async job, not a request.** `POST /api/compilations` (`backend/app/routers/compilations.py`) validates the timeline, creates a job in `JobStore`, and returns 202. A background task runs `backend/app/compilation/pipeline.py`, which moves the job through `queued → downloading → concatenating → ready` (or `failed` / `cancelled`). The UI polls status every 2s (`frontend/features/export/useExportJob.ts`). Saving copies the MP4 out and deletes the job folder, so the status becomes `saved` (`backend/app/delivery.py`).
 
-**State is per-process.** Job state is in memory. Files and `usage.json` (which sits next to `JOBS_DIR`) live on local disk. `JobStore` and `UsageStore` are created in the FastAPI lifespan in `main.py` and reached through `routers/deps.py`. Nothing is shared across instances, and a restart drops in-flight jobs.
+**State is per-process.** Job state is in memory. Files and `usage.json` (which sits next to `JOBS_DIR`) live on local disk. `JobStore` and `UsageStore` are created in the FastAPI lifespan in `main.py` and reached through `routers/deps.py`. Nothing is shared across instances, and a restart drops in-flight jobs. Only one export runs at a time (`JobStore.create_if_idle`), and `validate.py` caps a timeline at 100 clips and 4 hours. `JobStore.sweep` runs at startup and before each export and deletes finished jobs and leftover 32-hex job folders untouched for 24 hours.
 
 **Cancellation** (`backend/app/jobs/runner.py`): yt-dlp runs in-process, so cancel cannot simply kill a child. The `runner` singleton tracks a contextvar job id plus ffmpeg process groups. Workers check `JobCancelled` at checkpoints and in yt-dlp progress hooks. Parallel work in `pipeline._run_parallel` copies the contextvar context into each thread. On failure it marks the job cancelled and waits for workers before the folder is deleted. Process-group killing has separate POSIX and Windows paths, so keep both working.
 
