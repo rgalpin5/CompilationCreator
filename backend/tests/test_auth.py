@@ -119,6 +119,17 @@ class PasswordTests(unittest.TestCase):
         self.assertEqual(still_allowed, 200)
         self.assertEqual(paused, 429)
 
+    def test_non_ascii_file_tokens_are_refused_and_counted(self) -> None:
+        job_id = uuid.uuid4().hex
+        with patch.object(settings, "password", _SECRET):
+            refused = [
+                call(f"/api/compilations/{job_id}/file", query="token=%C3%A9")[0]
+                for _ in range(5)
+            ]
+            paused, _, _ = call("/api/session", headers={"Authorization": f"Bearer {_SECRET}"})
+        self.assertEqual(refused, [401] * 5)
+        self.assertEqual(paused, 429)
+
     def test_the_right_password_clears_earlier_failures(self) -> None:
         wrong = {"Authorization": "Bearer nope"}
         right = {"Authorization": f"Bearer {_SECRET}"}

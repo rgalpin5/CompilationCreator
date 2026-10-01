@@ -75,7 +75,8 @@ def _authorized(scope: Scope) -> bool:
         query = parse_qs(scope.get("query_string", b"").decode("latin-1"))
         supplied = query.get("token", [""])[0]
         expected = file_token(match.group(1))
-        return bool(supplied) and hmac.compare_digest(supplied, expected)
+        # Bytes, because compare_digest raises on non-ASCII str.
+        return bool(supplied) and hmac.compare_digest(supplied.encode(), expected.encode())
     return False
 
 
