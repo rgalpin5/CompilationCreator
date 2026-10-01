@@ -67,7 +67,9 @@ export default function VideoGrid({
         <div ref={sentinelRef} className="flex min-h-8 items-center justify-center">
           {moreError ? (
             <div className="flex flex-col items-center gap-2">
-              <p className="text-sm text-destructive">{moreError}</p>
+              <p role="alert" className="text-sm text-destructive">
+                {moreError}
+              </p>
               <Button type="button" variant="outline" onClick={onLoadMore}>
                 Try again
               </Button>

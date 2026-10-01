@@ -28,12 +28,17 @@ export default function JobStatusCard({
   return (
     <div className={cn("flex flex-col gap-1 rounded-lg px-3 py-2 text-sm", statusTone(job.status))}>
       <p>
-        Status: <span className="font-medium capitalize">{job.status}</span>
+        {/* Only the status is announced. Progress text changes on every poll. */}
+        <span role="status">
+          Status: <span className="font-medium capitalize">{job.status}</span>
+        </span>
         {job.progress ? ` — ${job.progress}` : null}
       </p>
       {job.status === "cancelled" && <p>Export cancelled. Partial downloads were deleted.</p>}
       {job.status === "failed" && (
-        <p className="text-destructive">{job.error || "Compilation failed."}</p>
+        <p role="alert" className="text-destructive">
+          {job.error || "Compilation failed."}
+        </p>
       )}
       {job.status === "ready" && job.file_url && (
         <div className="flex flex-col gap-2 pt-1">
@@ -59,7 +64,6 @@ export default function JobStatusCard({
             <Input
               value={folder}
               disabled={saving}
-              aria-label="Save folder"
               placeholder="Downloads"
               onChange={(event) => onFolderChange(event.target.value)}
             />

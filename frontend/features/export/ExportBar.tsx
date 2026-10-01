@@ -91,8 +91,16 @@ export default function ExportBar({
         </p>
       )}
 
-      {validationError && <p className="text-sm text-destructive">{validationError}</p>}
-      {requestError && <p className="text-sm text-destructive">{requestError}</p>}
+      {validationError && (
+        <p role="alert" className="text-sm text-destructive">
+          {validationError}
+        </p>
+      )}
+      {requestError && (
+        <p role="alert" className="text-sm text-destructive">
+          {requestError}
+        </p>
+      )}
 
       {job && (
         <JobStatusCard

@@ -38,7 +38,11 @@ export default function LogsPanel({ active }: Props): ReactElement {
 
   return (
     <div className="flex flex-col gap-10">
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <VideoTable videos={videos} />
       <CompilationTable compilations={compilations} />
     </div>
