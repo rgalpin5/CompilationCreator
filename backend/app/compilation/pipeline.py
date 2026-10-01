@@ -189,8 +189,8 @@ def _join(
     try:
         concat_clips(parts, output)
         return output
-    except FfmpegError:
-        pass
+    except FfmpegError as exc:
+        log.info("Export %s: stream copy join failed, re-encoding instead: %s", job_id, exc)
     normalized: list[Path] = []
     for index, raw in enumerate(raws, start=1):
         runner.checkpoint()
