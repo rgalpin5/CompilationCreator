@@ -119,7 +119,7 @@ CompCreator/
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | `{ "ok": true }` |
-| `GET` | `/api/session` | `200` when the request may use the API, `401` when the password is missing or wrong |
+| `GET` | `/api/session` | `200` when the request may use the API, `401` when the password is missing or wrong, `429` after too many wrong passwords from this client |
 | `POST` | `/api/channels?limit=&offset=` | One page of videos for a channel URL |
 | `POST` | `/api/compilations` | Start an export. Returns `202` and a job |
 | `GET` | `/api/compilations/{job_id}` | Status and progress |
@@ -149,7 +149,7 @@ A compilation body looks like this:
 }
 ```
 
-`video_id` must be an 11-character YouTube id. `start` and `end` are `mm:ss` or `hh:mm:ss`, and `end` must be after `start`. An export needs 1 to 100 clips and at most 4 hours of kept time in total. Only one export runs at a time; starting another while one is running returns `409`.
+`video_id` must be an 11-character YouTube id. `start` and `end` are `mm:ss` or `hh:mm:ss`, and `end` must be after `start`. An export needs 1 to 100 clips and at most 4 hours of kept time in total. Only one export runs at a time; starting another while one is running returns `409`. A cancelled export counts as running until its downloads and ffmpeg runs have actually stopped, which usually takes a few seconds.
 
 Job statuses: `queued`, `downloading`, `concatenating`, `ready`, `saved`, `failed`, `cancelled`. While the status is `ready`, a local or desktop server sets `download_url` (save into a folder) and a hosted server sets `file_url` (download in the browser). A server counts as hosted when `VERCEL` or `K_SERVICE` (Cloud Run) is set. `saved_path` is present after a folder save and is the only remaining copy. A browser download ends in `saved` with no `saved_path`, and `file_url` stays available for 10 minutes.
 
@@ -165,7 +165,7 @@ Backend (`backend/app/config.py` and the yt-dlp helpers):
 | `YTDLP_COOKIES` | unset | Cookie file contents, or the same contents in base64. A temp file is written with mode `0600` |
 | `YTDLP_COOKIES_BROWSER` | unset | Browser to read cookies from. `none` skips browser cookies. The desktop app fills this in |
 | `YTDLP_DENO` | discovered | Full path to Deno when cookies are used |
-| `COMPCREATOR_PASSWORD` | unset | Shared password for the API. Required on a hosted server (`VERCEL` or `K_SERVICE` set), which refuses to start without it. Every `/api` request must send `Authorization: Bearer <password>`; `/health` stays open. The UI asks for it once and remembers it in that browser. A finished video's `file_url` carries a token that unlocks only that job's file, so the password never appears in a link. Leave it unset for local use and the desktop app |
+| `COMPCREATOR_PASSWORD` | unset | Shared password for the API. Required on a hosted server (`VERCEL` or `K_SERVICE` set), which refuses to start without it or with one shorter than 12 characters. Every `/api` request must send `Authorization: Bearer <password>`; `/health` stays open. The UI asks for it once and remembers it in that browser. A finished video's `file_url` carries a token that unlocks only that job's file. The token is signed with a random key made at startup rather than with the password, so a leaked link cannot help anyone guess the password, and links stop working when the server restarts. After 5 wrong passwords or tokens in 15 minutes, a client (by IP, from the last `X-Forwarded-For` entry when hosted) gets `429` with `Retry-After` until the oldest failure is 15 minutes old. Requests that send no password do not count. Leave it unset for local use and the desktop app. Without a password, a local server answers only requests addressed to `localhost`, `127.0.0.1` or `[::1]`, which blocks DNS-rebinding pages; set a password to reach it from another address |
 | `COMPCREATOR_DESKTOP` | unset | Set by the desktop launcher |
 
 Frontend:
@@ -335,7 +335,7 @@ gcloud run deploy compcreator-api \
   --set-env-vars "CORS_ORIGINS=https://your-app.vercel.app"
 ```
 
-Cloud Run sets `K_SERVICE`, which makes the API a hosted server: it refuses to start without `COMPCREATOR_PASSWORD`, sends finished videos to the browser through `/api/compilations/{job_id}/file`, and does not save into server folders. `--allow-unauthenticated` lets browsers reach the service; the password protects it. Add `YTDLP_COOKIES=<secret>:latest` to `--set-secrets` when YouTube requires a signed-in session, and never commit cookie files.
+Cloud Run sets `K_SERVICE`, which makes the API a hosted server: it refuses to start without `COMPCREATOR_PASSWORD`, sends finished videos to the browser through `/api/compilations/{job_id}/file`, does not save into server folders, and does not serve `/docs`, `/redoc` or `/openapi.json`. `--allow-unauthenticated` lets browsers reach the service; the password protects it. Add `YTDLP_COOKIES=<secret>:latest` to `--set-secrets` when YouTube requires a signed-in session, and never commit cookie files.
 
 `--max-instances 1` keeps status polls and the download on the instance that holds the job. In-memory jobs and local MP4s do not survive a restart and are not shared across instances. Several origins need a custom gcloud delimiter because `--set-env-vars` splits on commas: `--set-env-vars "^;^CORS_ORIGINS=https://a.example,https://b.example"`. A later Cloud Storage signed-URL path is outlined in [docs/roadmap.md](docs/roadmap.md) and is not built.
 

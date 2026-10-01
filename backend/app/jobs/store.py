@@ -7,7 +7,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Unpack
+from typing import Literal, Unpack
 
 from app.errors import ensure_directory
 from app.records import JobRecord, JobUpdate
@@ -34,18 +34,54 @@ class JobStore:
         ensure_directory(self.root, purpose="jobs folder")
         self._jobs: dict[str, JobRecord] = {}
         self._touched: dict[str, float] = {}
+        # Jobs whose export worker has not returned yet. A cancelled job stays
+        # here until its downloads and ffmpeg runs have actually stopped.
+        self._working: set[str] = set()
         self._lock = threading.Lock()
         # Held across the idle check and the create so two requests cannot both pass.
         self._create_lock = threading.Lock()
         self.sweep()
 
     def create_if_idle(self) -> JobRecord | None:
-        """Like ``create``, but ``None`` while another export is still running."""
+        """Like ``create``, but ``None`` while another export is still running.
+
+        An export counts as running until ``worker_stopped`` is called for it,
+        even after it was marked cancelled, so a new export never overlaps the
+        old one's downloads. The caller must call ``worker_stopped`` once the
+        export's worker returns.
+        """
         with self._create_lock:
             with self._lock:
-                if any(job["status"] in _ACTIVE for job in self._jobs.values()):
+                if self._working or any(job["status"] in _ACTIVE for job in self._jobs.values()):
                     return None
-            return self.create()
+            job = self.create()
+            with self._lock:
+                self._working.add(job["id"])
+            return job
+
+    def cancel_if_active(self, job_id: str) -> Literal["cancelled", "not_running", "missing"]:
+        """Mark ``job_id`` cancelled, but only while it is still queued or working.
+
+        The check and the change happen under one lock, so a cancel cannot
+        overwrite an export that reached ``ready`` or ``failed`` in between.
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return "missing"
+            if job["status"] not in _ACTIVE:
+                return "not_running"
+            job["status"] = "cancelled"
+            job["progress"] = "Cancelled"
+            job["error"] = None
+            job["output_path"] = None
+            self._touched[job_id] = time.time()
+            return "cancelled"
+
+    def worker_stopped(self, job_id: str) -> None:
+        """Record that ``job_id``'s export worker has returned and nothing is writing."""
+        with self._lock:
+            self._working.discard(job_id)
 
     def create(self) -> JobRecord:
         """Reserve a new job id and an empty working folder."""
@@ -114,7 +150,9 @@ class JobStore:
             expired = {
                 job_id
                 for job_id, job in self._jobs.items()
-                if job["status"] not in _ACTIVE and self._touched.get(job_id, now) < cutoff
+                if job["status"] not in _ACTIVE
+                and job_id not in self._working
+                and self._touched.get(job_id, now) < cutoff
             }
             for job_id in expired:
                 del self._jobs[job_id]

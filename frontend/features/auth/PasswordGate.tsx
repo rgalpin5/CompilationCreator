@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { UnauthorizedError, rememberPassword } from "@/lib/api/auth";
+import { TooManyAttemptsError, UnauthorizedError, rememberPassword } from "@/lib/api/auth";
 import { checkSession } from "@/lib/api/session";
 
 type State = "checking" | "open" | "locked";
@@ -13,13 +13,14 @@ type State = "checking" | "open" | "locked";
  * Ask for the server's password before showing the app.
  *
  * Local and desktop servers set no password, so the check passes at once. Any
- * failure other than a 401 opens the app too, where the usual error messages
- * explain an unreachable API.
+ * failure other than a 401 or 429 opens the app too, where the usual error
+ * messages explain an unreachable API.
  */
 export default function PasswordGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>("checking");
   const [password, setPassword] = useState("");
-  const [wrong, setWrong] = useState(false);
+  // Why the last attempt failed, shown under the field.
+  const [problem, setProblem] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -29,7 +30,10 @@ export default function PasswordGate({ children }: { children: ReactNode }) {
         if (current) setState("open");
       })
       .catch((caught: unknown) => {
-        if (current) setState(caught instanceof UnauthorizedError ? "locked" : "open");
+        if (!current) return;
+        if (caught instanceof TooManyAttemptsError) setProblem(caught.message);
+        const locked = caught instanceof UnauthorizedError || caught instanceof TooManyAttemptsError;
+        setState(locked ? "locked" : "open");
       });
     return () => {
       current = false;
@@ -49,7 +53,10 @@ export default function PasswordGate({ children }: { children: ReactNode }) {
     } catch (caught: unknown) {
       if (caught instanceof UnauthorizedError) {
         rememberPassword("");
-        setWrong(true);
+        setProblem("That password is wrong.");
+      } else if (caught instanceof TooManyAttemptsError) {
+        rememberPassword("");
+        setProblem(caught.message);
       } else {
         setState("open");
       }
@@ -75,14 +82,14 @@ export default function PasswordGate({ children }: { children: ReactNode }) {
                 autoComplete="current-password"
                 value={password}
                 disabled={submitting}
-                aria-invalid={wrong || undefined}
+                aria-invalid={problem ? true : undefined}
                 onChange={(event) => {
                   setPassword(event.target.value);
-                  setWrong(false);
+                  setProblem(null);
                 }}
               />
             </label>
-            {wrong && <p className="text-sm text-destructive">That password is wrong.</p>}
+            {problem && <p className="text-sm text-destructive">{problem}</p>}
             <p className="text-sm text-muted-foreground">
               This browser remembers the password once it works.
             </p>

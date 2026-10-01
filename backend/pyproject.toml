@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "FastAPI service that lists a YouTube channel and joins selected clips into one MP4."
 requires-python = ">=3.12"
 dependencies = [
-  "fastapi>=0.115.0",
+  "fastapi>=0.132.0",
   "uvicorn[standard]>=0.32.0",
   "yt-dlp>=2025.9.26",
   "pydantic>=2.9.0",
@@ -58,7 +58,7 @@ ignore = ["RUF001", "RUF002", "RUF003", "N818"]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app"]
+known-first-party = ["app", "tests"]
 
 [tool.ruff.lint.per-file-ignores]
 "../packaging/entry.py" = ["E402"]
@@ -68,6 +68,8 @@ known-first-party = ["app"]
 [tool.mypy]
 python_version = "3.12"
 files = ["app", "tests"]
+# Test modules import tests.asgi, so name them from the backend folder.
+explicit_package_bases = true
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

@@ -19,12 +19,17 @@ from app.delivery import (
 from app.errors import terminal_message
 from app.jobs.runner import runner
 from app.jobs.store import JobStore
-from app.models import CompilationRequest, DownloadRequest, JobStatus
+from app.models import (
+    CompilationRequest,
+    DownloadFolder,
+    DownloadRequest,
+    JobStatus,
+    error_responses,
+)
 from app.records import JobRecord
 from app.routers.deps import get_job_store, get_usage_store
 from app.usage.store import UsageStore
 
-_ACTIVE = {"queued", "downloading", "concatenating"}
 # A browser download stays available while saved, until the grace period ends.
 _DOWNLOADABLE = {"ready", "saved"}
 BROWSER_DOWNLOAD_GRACE_SECONDS = 600.0
@@ -33,7 +38,12 @@ router = APIRouter()
 _save_lock = threading.Lock()
 
 
-@router.post("/compilations", status_code=202, response_model=JobStatus)
+@router.post(
+    "/compilations",
+    status_code=202,
+    response_model=JobStatus,
+    responses=error_responses(400, 409),
+)
 def create_compilation(
     body: CompilationRequest,
     background_tasks: BackgroundTasks,
@@ -50,7 +60,10 @@ def create_compilation(
     if job is None:
         raise HTTPException(
             status_code=409,
-            detail="Another export is still running. Wait for it to finish or cancel it.",
+            detail=(
+                "Another export is still running or stopping. "
+                "Wait for it to finish or cancel it, then try again."
+            ),
         )
     background_tasks.add_task(
         run_compilation, job_store, job["id"], clips, body.output_4k, usage_store
@@ -58,7 +71,7 @@ def create_compilation(
     return _public(job)
 
 
-@router.get("/compilations/{job_id}", response_model=JobStatus)
+@router.get("/compilations/{job_id}", response_model=JobStatus, responses=error_responses(404))
 def compilation_status(
     job_id: str,
     job_store: JobStore = Depends(get_job_store),
@@ -70,18 +83,21 @@ def compilation_status(
     return _public(job)
 
 
-@router.post("/compilations/{job_id}/cancel", response_model=JobStatus)
+@router.post(
+    "/compilations/{job_id}/cancel",
+    response_model=JobStatus,
+    responses=error_responses(404, 409),
+)
 def cancel_compilation(
     job_id: str,
     job_store: JobStore = Depends(get_job_store),
 ) -> JobStatus:
     """Stop ``job_id`` when it is still queued, downloading, or joining."""
-    job = job_store.get(job_id)
-    if not job:
+    outcome = job_store.cancel_if_active(job_id)
+    if outcome == "missing":
         raise HTTPException(status_code=404, detail="Job not found")
-    if job["status"] not in _ACTIVE:
+    if outcome == "not_running":
         raise HTTPException(status_code=409, detail="That export is no longer running")
-    job_store.update(job_id, status="cancelled", progress="Cancelled", error=None, output_path=None)
     # The export removes its own folder once its workers have stopped.
     # Deleting it here would race downloads that are still writing.
     runner.cancel(job_id)
@@ -91,13 +107,17 @@ def cancel_compilation(
     return _public(cancelled)
 
 
-@router.get("/download-folder")
-def download_folder() -> dict[str, str]:
+@router.get("/download-folder", response_model=DownloadFolder)
+def download_folder() -> DownloadFolder:
     """The default folder a finished video is saved into."""
-    return {"path": str(default_download_dir())}
+    return DownloadFolder(path=str(default_download_dir()))
 
 
-@router.post("/compilations/{job_id}/download", response_model=JobStatus)
+@router.post(
+    "/compilations/{job_id}/download",
+    response_model=JobStatus,
+    responses=error_responses(400, 404, 409, 500),
+)
 def download_compilation(
     job_id: str,
     body: DownloadRequest | None = None,
@@ -150,7 +170,14 @@ def download_compilation(
         return _public(saved_job)
 
 
-@router.get("/compilations/{job_id}/file")
+@router.get(
+    "/compilations/{job_id}/file",
+    response_class=FileResponse,
+    responses={
+        200: {"content": {"video/mp4": {}}, "description": "The finished MP4"},
+        **error_responses(404),
+    },
+)
 def compilation_file(
     job_id: str,
     request: Request,

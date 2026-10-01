@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.config import DEFAULT_VIDEO_LIMIT, MAX_VIDEO_LIMIT
-from app.models import ChannelRequest, ChannelResponse, VideoItem
+from app.models import ChannelRequest, ChannelResponse, VideoItem, error_responses
 from app.routers.deps import get_usage_store
 from app.usage.store import UsageStore
 from app.youtube.listing import list_channel_videos
@@ -10,7 +10,7 @@ from app.youtube.urls import ChannelError
 router = APIRouter()
 
 
-@router.post("/channels", response_model=ChannelResponse)
+@router.post("/channels", response_model=ChannelResponse, responses=error_responses(400))
 def read_channel(
     body: ChannelRequest,
     limit: int = Query(default=DEFAULT_VIDEO_LIMIT, ge=1, le=MAX_VIDEO_LIMIT),

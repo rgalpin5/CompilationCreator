@@ -1,4 +1,4 @@
-import { UnauthorizedError, authHeaders, storedPassword } from "./auth";
+import { TooManyAttemptsError, UnauthorizedError, authHeaders, storedPassword } from "./auth";
 
 // Same origin by default, as in the desktop app, where one process serves the
 // UI and the API. Set NEXT_PUBLIC_API_URL when the API is on another origin:
@@ -36,6 +36,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const body = await readJson(res);
   if (res.status === 401) {
     throw new UnauthorizedError(detailMessage(body, res.status));
+  }
+  if (res.status === 429) {
+    throw new TooManyAttemptsError(detailMessage(body, res.status));
   }
   if (!res.ok) {
     throw new Error(detailMessage(body, res.status));

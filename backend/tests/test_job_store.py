@@ -104,6 +104,36 @@ class SweepTests(unittest.TestCase):
             self.assertFalse(old.exists())
 
 
+class CancelIfActiveTests(unittest.TestCase):
+    def test_cancels_only_a_job_that_is_still_working(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs = JobStore(Path(tmp) / "jobs")
+            working = jobs.create()
+            finished = jobs.create()
+            jobs.update(finished["id"], status="ready", output_path="/tmp/out.mp4")
+            self.assertEqual(jobs.cancel_if_active(working["id"]), "cancelled")
+            self.assertEqual(jobs.cancel_if_active(finished["id"]), "not_running")
+            self.assertEqual(jobs.cancel_if_active(uuid.uuid4().hex), "missing")
+            cancelled = jobs.get(working["id"])
+            ready = jobs.get(finished["id"])
+        assert cancelled is not None and ready is not None
+        self.assertEqual(cancelled["status"], "cancelled")
+        self.assertIsNone(cancelled["output_path"])
+        self.assertEqual(ready["status"], "ready")
+        self.assertEqual(ready["output_path"], "/tmp/out.mp4")
+
+    def test_a_ready_update_after_cancel_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs = JobStore(Path(tmp) / "jobs")
+            job = jobs.create()
+            jobs.cancel_if_active(job["id"])
+            jobs.update(job["id"], status="ready", output_path="/tmp/out.mp4")
+            after = jobs.get(job["id"])
+        assert after is not None
+        self.assertEqual(after["status"], "cancelled")
+        self.assertIsNone(after["output_path"])
+
+
 class OneExportAtATimeTests(unittest.TestCase):
     def test_create_if_idle_waits_for_the_running_export(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -114,7 +144,31 @@ class OneExportAtATimeTests(unittest.TestCase):
             jobs.update(first["id"], status="downloading")
             self.assertIsNone(jobs.create_if_idle())
             jobs.update(first["id"], status="ready")
+            jobs.worker_stopped(first["id"])
             self.assertIsNotNone(jobs.create_if_idle())
+
+    def test_a_cancelled_export_blocks_the_next_until_its_worker_stops(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs = JobStore(Path(tmp) / "jobs")
+            first = jobs.create_if_idle()
+            assert first is not None
+            jobs.update(first["id"], status="cancelled")
+            self.assertIsNone(jobs.create_if_idle())
+            jobs.worker_stopped(first["id"])
+            self.assertIsNotNone(jobs.create_if_idle())
+
+    def test_sweep_keeps_a_cancelled_job_whose_worker_is_still_running(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs = JobStore(Path(tmp) / "jobs", stale_after=0)
+            job = jobs.create_if_idle()
+            assert job is not None
+            jobs.update(job["id"], status="cancelled")
+            jobs.sweep(now=time.time() + 10)
+            self.assertIsNotNone(jobs.get(job["id"]))
+            self.assertTrue(Path(job["dir"]).is_dir())
+            jobs.worker_stopped(job["id"])
+            jobs.sweep(now=time.time() + 10)
+            self.assertIsNone(jobs.get(job["id"]))
 
     def test_only_one_of_many_simultaneous_requests_starts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

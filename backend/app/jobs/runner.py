@@ -23,9 +23,14 @@ class Runner:
         self._lock = threading.Lock()
         self._cancelled: set[str] = set()
         self._pids: dict[str, set[int]] = {}
+        # Exports between ``bind`` and ``forget``. Cancel ignores any other id,
+        # so a cancel that arrives after an export finished leaves nothing behind.
+        self._live: set[str] = set()
 
     def bind(self, job_id: str) -> contextvars.Token[str | None]:
         """Make ``job_id`` the export for the current context. Return the reset token."""
+        with self._lock:
+            self._live.add(job_id)
         return _job_id.set(job_id)
 
     def unbind(self, token: contextvars.Token[str | None]) -> None:
@@ -33,8 +38,14 @@ class Runner:
         _job_id.reset(token)
 
     def cancel(self, job_id: str) -> None:
-        """Mark ``job_id`` cancelled and stop every child it still owns."""
+        """Mark ``job_id`` cancelled and stop every child it still owns.
+
+        An export that is not bound, because it has not started or has already
+        finished, is left alone. Its caller checks the job store instead.
+        """
         with self._lock:
+            if job_id not in self._live:
+                return
             self._cancelled.add(job_id)
             pids = list(self._pids.get(job_id, ()))
         for pid in pids:
@@ -43,6 +54,7 @@ class Runner:
     def forget(self, job_id: str) -> None:
         """Drop the cancel flag and process list of a finished export."""
         with self._lock:
+            self._live.discard(job_id)
             self._cancelled.discard(job_id)
             self._pids.pop(job_id, None)
 
