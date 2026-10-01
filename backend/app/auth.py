@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import math
 import re
 import secrets
@@ -29,6 +30,7 @@ from app.errors import ConfigurationError
 from app.throttle import FailureThrottle
 
 _FILE_ROUTE = re.compile(r"/api/compilations/([0-9a-f]{32})/file")
+_TOKEN_QUERY = re.compile(r"([?&])token=[^&]*")
 # Signs download tokens. Jobs live only in this process, so their links may too.
 _TOKEN_KEY = secrets.token_bytes(32)
 # Short passwords fall to guessing even with the throttle below.
@@ -75,7 +77,8 @@ def _authorized(scope: Scope) -> bool:
         query = parse_qs(scope.get("query_string", b"").decode("latin-1"))
         supplied = query.get("token", [""])[0]
         expected = file_token(match.group(1))
-        return bool(supplied) and hmac.compare_digest(supplied, expected)
+        # Bytes, because compare_digest raises on non-ASCII str.
+        return bool(supplied) and hmac.compare_digest(supplied.encode(), expected.encode())
     return False
 
 
@@ -87,16 +90,41 @@ def _sent_credentials(scope: Scope) -> bool:
     return bool(query.get("token"))
 
 
+class _HideFileTokens(logging.Filter):
+    """Mask ``token=`` in uvicorn access-log lines so a log reader cannot reuse a link."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # uvicorn.access passes (client, method, path, http_version, status).
+        args = record.args
+        if isinstance(args, tuple) and len(args) > 2 and isinstance(args[2], str):
+            record.args = (*args[:2], _TOKEN_QUERY.sub(r"\1token=hidden", args[2]), *args[3:])
+        return True
+
+
+_access_log_filter = _HideFileTokens()
+
+
+def hide_tokens_in_access_log() -> None:
+    """Keep download tokens out of uvicorn's access log. Safe to call more than once."""
+    # Logger.addFilter skips a filter it already has.
+    logging.getLogger("uvicorn.access").addFilter(_access_log_filter)
+
+
 def _client_address(scope: Scope) -> str:
     """The caller's IP address, as seen by the hosting platform's proxy when hosted."""
     if settings.hosted:
-        # The platform appends the address it saw to whatever the caller sent,
-        # so only the last entry can be trusted.
+        # Each trusted proxy appends the address it saw to whatever the caller
+        # sent, so the entry that many places from the right is the caller.
+        # Cloud Run's own URL is one hop; a load balancer or CDN in front adds
+        # one each (COMPCREATOR_TRUSTED_PROXY_HOPS).
         for name, value in scope.get("headers", []):
             if name == b"x-forwarded-for":
-                last: str = value.decode("latin-1").rsplit(",", 1)[-1].strip()
-                if last:
-                    return last
+                entries: list[str] = [item.strip() for item in value.decode("latin-1").split(",")]
+                hops = settings.trusted_proxy_hops
+                # Fewer entries than hops: the leftmost is the closest we have.
+                chosen = entries[-hops] if len(entries) >= hops else entries[0]
+                if chosen:
+                    return chosen
     client = scope.get("client")
     return str(client[0]) if client else "unknown"
 

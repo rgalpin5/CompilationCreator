@@ -110,10 +110,6 @@ def _local_media_tool(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
 
-def _refuse_ffprobe(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-    raise AssertionError("ffprobe was started")
-
-
 def _same_layout(_path: Path) -> StreamLayout:
     return _LAYOUT
 
@@ -155,7 +151,6 @@ def _quiet_network() -> Iterator[None]:
     with (
         patch.dict(os.environ, hidden),
         patch("app.youtube.client.yt_dlp.YoutubeDL", _OfflineYoutubeDL),
-        patch("app.media.probe.subprocess.run", _refuse_ffprobe),
         patch.object(runner, "run", _local_media_tool),
     ):
         yield
@@ -205,6 +200,8 @@ class LocalWorkflowTests(unittest.TestCase):
             with (
                 patch("app.compilation.pipeline.download_section", _fake_download),
                 patch("app.compilation.pipeline.probe_layout", _same_layout),
+                # Kept so the steps' files can be checked below.
+                patch("app.compilation.pipeline._remove_working_files") as cleanup,
             ):
                 job_id = _run_export(
                     jobs,
@@ -245,6 +242,7 @@ class LocalWorkflowTests(unittest.TestCase):
             self.assertIsNotNone(stored)
             assert stored is not None
             job_dir = Path(stored["dir"])
+            cleanup.assert_called_once_with(job_dir, keep=job_dir / "compilation.mp4")
             self.assertEqual((job_dir / "raw_001.mp4").read_bytes(), b"abcdefghijk 10-40")
             self.assertEqual((job_dir / "raw_002.mp4").read_bytes(), b"abcdefghijl 5-25")
             self.assertEqual((job_dir / "part_001.mp4").read_bytes(), b"abcdefghijk 10-40")

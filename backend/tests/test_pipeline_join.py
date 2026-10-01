@@ -1,5 +1,6 @@
 """The join step's fallbacks: stream copy, then normalize and copy, then re-encode."""
 
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
@@ -43,6 +44,17 @@ class JoinFallbackTests(unittest.TestCase):
             [call(raw, norm, output_4k=False) for raw, norm in zip(RAWS, NORMALIZED, strict=True)],
         )
         reencode.assert_not_called()
+
+    def test_working_files_are_removed_and_only_the_output_kept(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            job_dir = Path(tmp)
+            output = job_dir / "compilation.mp4"
+            names = ["raw_001.mp4", "part_001.mp4", "norm_001.mp4", "concat.txt"]
+            for name in [*names, output.name]:
+                (job_dir / name).write_bytes(b"x")
+            (job_dir / "raw_002.mp4.part-Frag1").mkdir()
+            pipeline._remove_working_files(job_dir, keep=output)
+            self.assertEqual([entry.name for entry in job_dir.iterdir()], [output.name])
 
     def test_second_failed_copy_falls_back_to_a_full_reencode(self) -> None:
         concat = MagicMock(side_effect=FfmpegError("copy failed"))

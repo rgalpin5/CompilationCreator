@@ -16,6 +16,7 @@ def layouts_match(layouts: list[StreamLayout | None]) -> bool:
 
 class Prep(NamedTuple):
     """How one clip should be prepared before it is joined."""
+
     mode: str
     width: int
     height: int
@@ -102,10 +103,7 @@ def prep_plan(layouts: Sequence[StreamLayout | None]) -> list[Prep]:
     if codec != "h264" and "video" in modes:
         modes = ["video"] * len(layouts)
 
-    return [
-        Prep(mode, width, height, fps, audio_codec, sample_rate, channels)
-        for mode in modes
-    ]
+    return [Prep(mode, width, height, fps, audio_codec, sample_rate, channels) for mode in modes]
 
 
 def fit_4k(plan: Sequence[Prep], layouts: Sequence[StreamLayout | None]) -> list[Prep]:

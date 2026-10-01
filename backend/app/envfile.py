@@ -2,16 +2,21 @@
 
 The supported syntax is one ``KEY=VALUE`` pair per line. A leading ``export``
 is optional. Values may be wrapped in single or double quotes. Blank lines
-and full-line comments are ignored. Existing variables win, and a missing
-file is a no-op so hosted deploys can rely on real environment variables.
+and full-line comments are ignored, and so is a `` # comment`` after an
+unquoted value. Existing variables win, and a missing file is a no-op so
+hosted deploys can rely on real environment variables.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import MutableMapping
 from pathlib import Path
 
 from app.errors import ConfigurationError
+
+# In an unquoted value, a "#" after whitespace starts a comment.
+_INLINE_COMMENT = re.compile(r"\s#")
 
 
 def load_env_file(path: Path, environ: MutableMapping[str, str]) -> None:
@@ -54,7 +59,7 @@ def _parse_assignment(raw_line: str) -> tuple[str, str] | None:
     name = key.strip()
     if not _is_env_name(name):
         return None
-    return name, _unquote(value.strip())
+    return name, _parse_value(value)
 
 
 def _is_env_name(name: str) -> bool:
@@ -63,7 +68,21 @@ def _is_env_name(name: str) -> bool:
     return all(character.isalnum() or character == "_" for character in name)
 
 
-def _unquote(value: str) -> str:
+def _parse_value(value: str) -> str:
+    """Unquote ``value``, or drop a trailing `` # comment`` when it is unquoted.
+
+    Quoted values keep ``#`` verbatim. In an unquoted value only a ``#`` that
+    follows whitespace starts a comment, so ``a#b`` stays as written. The
+    whitespace may be the gap after ``=``, so ``KEY= # note`` is empty.
+    """
+    uncommented = _INLINE_COMMENT.split(value, maxsplit=1)[0].strip()
+    value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
         return value[1:-1]
-    return value
+    if value[:1] in {"'", '"'}:
+        closing = value.find(value[0], 1)
+        if closing > 0:
+            rest = value[closing + 1 :]
+            if rest[:1].isspace() and rest.strip().startswith("#"):
+                return value[1:closing]
+    return uncommented

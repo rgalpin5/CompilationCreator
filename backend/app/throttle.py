@@ -24,7 +24,7 @@ class FailureThrottle:
         clock: Callable[[], float] = time.monotonic,
         max_clients: int = 10_000,
     ) -> None:
-        """Track at most about ``max_clients`` clients before forgetting idle ones."""
+        """Track at most ``max_clients`` clients, forgetting idle ones and then the oldest."""
         self.limit = limit
         self.window = window
         self._clock = clock
@@ -45,9 +45,14 @@ class FailureThrottle:
         """Remember one failed attempt from ``client``."""
         with self._lock:
             now = self._clock()
-            self._failures[client] = [*self._recent(client, now), now]
+            times = [*self._recent(client, now), now]
+            # Re-inserting moves the client to the end, so the dict stays
+            # ordered from least to most recently failed.
+            self._failures.pop(client, None)
+            self._failures[client] = times
             if len(self._failures) > self._max_clients:
                 self._forget_idle(now)
+                self._forget_oldest()
 
     def clear(self, client: str) -> None:
         """Forget ``client``'s failures after it proves it knows the password."""
@@ -68,3 +73,9 @@ class FailureThrottle:
         idle = [c for c, times in self._failures.items() if times[-1] <= cutoff]
         for client in idle:
             del self._failures[client]
+
+    def _forget_oldest(self) -> None:
+        # Many clients failing inside one window (rotating IPv6 addresses, say)
+        # are not idle, so drop the least recently failed to keep a hard cap.
+        while len(self._failures) > self._max_clients:
+            del self._failures[next(iter(self._failures))]

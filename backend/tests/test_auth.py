@@ -1,13 +1,14 @@
 import hashlib
 import hmac
 import json
+import logging
 import unittest
 import uuid
 from unittest.mock import patch
 
 from app import auth
 from app.auth import file_token, require_password_when_hosted
-from app.config import settings
+from app.config import Settings, settings
 from app.errors import ConfigurationError
 from app.throttle import FailureThrottle
 from tests.asgi import call
@@ -119,6 +120,16 @@ class PasswordTests(unittest.TestCase):
         self.assertEqual(still_allowed, 200)
         self.assertEqual(paused, 429)
 
+    def test_non_ascii_file_tokens_are_refused_and_counted(self) -> None:
+        job_id = uuid.uuid4().hex
+        with patch.object(settings, "password", _SECRET):
+            refused = [
+                call(f"/api/compilations/{job_id}/file", query="token=%C3%A9")[0] for _ in range(5)
+            ]
+            paused, _, _ = call("/api/session", headers={"Authorization": f"Bearer {_SECRET}"})
+        self.assertEqual(refused, [401] * 5)
+        self.assertEqual(paused, 429)
+
     def test_the_right_password_clears_earlier_failures(self) -> None:
         wrong = {"Authorization": "Bearer nope"}
         right = {"Authorization": f"Bearer {_SECRET}"}
@@ -177,6 +188,70 @@ class PasswordTests(unittest.TestCase):
             require_password_when_hosted()
         with patch.object(settings, "hosted", False), patch.object(settings, "password", None):
             require_password_when_hosted()
+
+    def test_trusted_proxy_hops_picks_the_entry_that_far_from_the_right(self) -> None:
+        def address(forwarded: str | None, hops: int) -> str:
+            headers = {"X-Forwarded-For": forwarded} if forwarded is not None else {}
+            scope = {
+                "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()],
+                "client": ("192.0.2.1", 50000),
+            }
+            with (
+                patch.object(settings, "hosted", True),
+                patch.object(settings, "trusted_proxy_hops", hops),
+            ):
+                return auth._client_address(scope)
+
+        chain = "203.0.113.9, 198.51.100.7, 35.191.0.1"
+        self.assertEqual(address(chain, 1), "35.191.0.1")
+        self.assertEqual(address(chain, 2), "198.51.100.7")
+        self.assertEqual(address(chain, 3), "203.0.113.9")
+        # Fewer entries than hops falls back to the leftmost entry.
+        self.assertEqual(address("198.51.100.7, 35.191.0.1", 3), "198.51.100.7")
+        # No header falls back to the socket client.
+        self.assertEqual(address(None, 2), "192.0.2.1")
+
+    def test_hosted_server_behind_a_load_balancer_throttles_each_caller(self) -> None:
+        def guess(caller: str) -> int:
+            headers = {"Authorization": "Bearer nope", "X-Forwarded-For": f"{caller}, 35.191.0.1"}
+            return call("/api/session", headers=headers)[0]
+
+        with (
+            patch.object(settings, "password", _SECRET),
+            patch.object(settings, "hosted", True),
+            patch.object(settings, "trusted_proxy_hops", 2),
+        ):
+            statuses = [guess("203.0.113.1") for _ in range(6)]
+            other = guess("203.0.113.2")
+        self.assertEqual(statuses, [401] * 5 + [429])
+        self.assertEqual(other, 401)
+
+    def test_bad_trusted_proxy_hops_are_refused(self) -> None:
+        for raw in ("0", "-1", "two", "1.5"):
+            with (
+                patch.dict("os.environ", {"COMPCREATOR_TRUSTED_PROXY_HOPS": raw}),
+                self.assertRaisesRegex(ConfigurationError, "COMPCREATOR_TRUSTED_PROXY_HOPS"),
+            ):
+                Settings()
+        with patch.dict("os.environ", {"COMPCREATOR_TRUSTED_PROXY_HOPS": " 3 "}):
+            self.assertEqual(Settings().trusted_proxy_hops, 3)
+        with patch.dict("os.environ", {"COMPCREATOR_TRUSTED_PROXY_HOPS": ""}):
+            self.assertEqual(Settings().trusted_proxy_hops, 1)
+
+
+class AccessLogTests(unittest.TestCase):
+    def test_download_tokens_are_hidden_in_access_log_lines(self) -> None:
+        auth.hide_tokens_in_access_log()
+        auth.hide_tokens_in_access_log()
+        access = logging.getLogger("uvicorn.access")
+        self.assertEqual(access.filters.count(auth._access_log_filter), 1)
+        path = "/api/compilations/abc/file?download=1&token=s3cret&x=2"
+        with self.assertLogs(access, level="INFO") as logs:
+            access.info('%s - "%s %s HTTP/%s" %d', "1.2.3.4", "GET", path, "1.1", 200)
+            access.info('%s - "%s %s HTTP/%s" %d', "1.2.3.4", "GET", "/api/x?token=t", "1.1", 200)
+        self.assertNotIn("s3cret", logs.output[0])
+        self.assertIn("?download=1&token=hidden&x=2", logs.output[0])
+        self.assertIn("/api/x?token=hidden", logs.output[1])
 
 
 if __name__ == "__main__":

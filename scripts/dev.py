@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -93,6 +94,7 @@ def cmd_dev() -> None:
     cmd_setup()
     _require_ports(8000, 3000)
     print("Starting the API on http://localhost:8000 and the UI on http://localhost:3000")
+    _exit_on_hangup()
     backend = _spawn(
         [
             str(_venv_python()),
@@ -107,8 +109,9 @@ def cmd_dev() -> None:
         ],
         cwd=BACKEND,
     )
-    frontend = _spawn([_npm(), "run", "dev"], cwd=FRONTEND)
+    frontend: subprocess.Popen[bytes] | None = None
     try:
+        frontend = _spawn([_npm(), "run", "dev"], cwd=FRONTEND)
         while True:
             if backend.poll() is not None:
                 raise SystemExit("The API process stopped.")
@@ -119,7 +122,8 @@ def cmd_dev() -> None:
         print("\nStopping.")
     finally:
         _stop(backend)
-        _stop(frontend)
+        if frontend is not None:
+            _stop(frontend)
 
 
 def cmd_lint() -> None:
@@ -201,7 +205,9 @@ def _require_python() -> None:
 def _require_node() -> None:
     node = shutil.which("node")
     if node is None or shutil.which("npm") is None:
-        raise SystemExit("Node.js 20 or newer and npm are required. Install them from https://nodejs.org/.")
+        raise SystemExit(
+            "Node.js 20 or newer and npm are required. Install them from https://nodejs.org/."
+        )
     raw = subprocess.check_output([node, "--version"], text=True).strip()
     if node_is_supported(raw):
         return
@@ -290,18 +296,46 @@ def _run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None) ->
 
 
 def _spawn(command: list[str], *, cwd: Path) -> subprocess.Popen[bytes]:
+    """Start ``command`` in its own process group so ``_stop`` can end all of it.
+
+    The terminal's Ctrl+C then reaches only this script, and ``cmd_dev`` stops
+    the children itself.
+    """
     print("+", " ".join(command), flush=True)
     try:
-        return subprocess.Popen(command, cwd=cwd)
+        if sys.platform == "win32":
+            return subprocess.Popen(
+                command, cwd=cwd, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+            )
+        return subprocess.Popen(command, cwd=cwd, start_new_session=True)
     except OSError as exc:
         raise SystemExit(f"Could not start {command[0]}: {exc}") from exc
 
 
-def _stop(process: subprocess.Popen[bytes]) -> None:
-    """Stop ``process`` and the children it started."""
-    if process.poll() is not None:
-        return
+def _exit_on_hangup() -> None:
+    """Unwind through ``cmd_dev``'s cleanup when the terminal closes or on SIGTERM.
+
+    The children run in their own sessions, so these signals no longer reach them.
+    """
     if sys.platform == "win32":
+        return
+
+    def leave(signum: int, _frame: object) -> None:
+        raise SystemExit(128 + signum)
+
+    signal.signal(signal.SIGHUP, leave)
+    signal.signal(signal.SIGTERM, leave)
+
+
+def _stop(process: subprocess.Popen[bytes], *, timeout: float = 8) -> None:
+    """Stop ``process`` and the children it started.
+
+    ``npm run dev`` starts ``node`` as a child, so stopping only ``npm`` would
+    leave the Next.js server running. The whole process group is signalled.
+    """
+    if sys.platform == "win32":
+        if process.poll() is not None:
+            return
         subprocess.run(
             ["taskkill", "/F", "/T", "/PID", str(process.pid)],
             check=False,
@@ -309,12 +343,37 @@ def _stop(process: subprocess.Popen[bytes]) -> None:
             stderr=subprocess.DEVNULL,
         )
         return
-    process.terminate()
+    # The group outlives its leader, so signal it even when npm has exited.
+    group = process.pid
+    if not _signal_group(group, signal.SIGTERM):
+        process.poll()
+        return
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        process.poll()
+        if not _signal_group(group, 0):
+            return
+        time.sleep(0.1)
+    _signal_group(group, signal.SIGKILL)
     try:
-        process.wait(timeout=8)
-    except subprocess.TimeoutExpired:
-        process.kill()
         process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        return
+
+
+def _signal_group(group: int, sig: int) -> bool:
+    """Send ``sig`` to process group ``group``. Return False once the group is gone."""
+    if sys.platform == "win32":
+        return False
+    try:
+        os.killpg(group, sig)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # macOS answers this way while the leader is exiting but not yet reaped.
+        # The caller's poll() reaps it, and the next call sees the group gone.
+        return True
+    return True
 
 
 if __name__ == "__main__":

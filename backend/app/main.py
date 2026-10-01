@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.auth import PasswordMiddleware, require_password_when_hosted
+from app.auth import PasswordMiddleware, hide_tokens_in_access_log, require_password_when_hosted
 from app.config import settings
 from app.errors import ConfigurationError, stop_for_local_error, terminal_message
 from app.jobs.store import JobStore
@@ -23,6 +23,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     A hosted server without a password, a folder that cannot be created, or a
     usage log that cannot be read prints one line and stops the process.
     """
+    # After uvicorn has configured logging, so the filter is not reset.
+    hide_tokens_in_access_log()
     try:
         require_password_when_hosted()
         application.state.usage_store = UsageStore(settings.jobs_dir.parent / "usage.json")
