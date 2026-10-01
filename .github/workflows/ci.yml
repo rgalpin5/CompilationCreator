@@ -1,0 +1,46 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  # Desktop packages runs these first so a failing build never ships an installer.
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Cancellation and path handling have separate Windows code paths.
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      # The committed installers live in LFS and are not needed here.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # Setup refuses to continue without ffmpeg and ffprobe on PATH. The tests
+      # themselves stub them out.
+      - name: Install ffmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+      - name: Set up
+        run: python scripts/dev.py setup
+      - name: Lint
+        if: runner.os == 'Linux'
+        run: python scripts/dev.py lint
+      - name: Test
+        run: python scripts/dev.py test
