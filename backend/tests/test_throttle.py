@@ -42,6 +42,18 @@ class FailureThrottleTests(unittest.TestCase):
         throttle.record_failure("c")
         self.assertEqual(set(throttle._failures), {"c"})
 
+    def test_least_recently_failed_clients_are_dropped_at_the_cap(self) -> None:
+        throttle = FailureThrottle(limit=3, window=60, clock=self.clock, max_clients=2)
+        throttle.record_failure("a")
+        self.clock.now += 1
+        throttle.record_failure("b")
+        self.clock.now += 1
+        throttle.record_failure("a")
+        self.clock.now += 1
+        throttle.record_failure("c")
+        self.assertEqual(list(throttle._failures), ["a", "c"])
+        self.assertEqual(len(throttle._failures["a"]), 2)
+
     def test_checking_a_client_does_not_store_it(self) -> None:
         self.assertEqual(self.throttle.retry_after("never-failed"), 0)
         self.assertEqual(self.throttle._failures, {})
