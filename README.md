@@ -351,5 +351,3 @@ Cloud Run sets `K_SERVICE`, which makes the API a hosted server: it refuses to s
 - Cloud Storage delivery: upload a finished MP4 and return a signed URL.
 - YouTube upload: upload a finished compilation with the YouTube Data API.
 - Autopilot: scheduled channel scans that suggest compilation ideas.
-
-`max_video_height` in `backend/app/youtube/formats.py` is also unused by the current routes.

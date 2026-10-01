@@ -1,9 +1,9 @@
 import unittest
 from unittest.mock import patch
 
-from app.compilation.validate import MAX_CLIPS, validate_timeline, videos_missing_4k
+from app.compilation.validate import MAX_CLIPS, validate_timeline
 from app.models import Clip
-from app.timeparse import format_timestamp, parse_timestamp
+from app.timeparse import parse_timestamp
 from app.youtube.urls import ChannelError, normalize_channel_url
 
 
@@ -22,16 +22,6 @@ class TimeParseTests(unittest.TestCase):
             parse_timestamp("15")
         with self.assertRaises(ValueError):
             parse_timestamp("1:2:3")
-
-    def test_format_mm_ss_and_hours(self) -> None:
-        self.assertEqual(format_timestamp(0), "00:00")
-        self.assertEqual(format_timestamp(15), "00:15")
-        self.assertEqual(format_timestamp(65.9), "01:05")
-        self.assertEqual(format_timestamp(3723), "1:02:03")
-
-    def test_format_round_trips_through_parse(self) -> None:
-        self.assertEqual(parse_timestamp(format_timestamp(3723)), 3723)
-        self.assertEqual(parse_timestamp(format_timestamp(65)), 65)
 
 
 class TimelineTests(unittest.TestCase):
@@ -69,15 +59,6 @@ class TimelineTests(unittest.TestCase):
         extra = Clip(video_id="abcdefghijl", start="00:00", end="00:01", order=1)
         with self.assertRaisesRegex(ValueError, "at most 4 hours"):
             validate_timeline([full, full, extra])
-
-
-class FourKTests(unittest.TestCase):
-    def test_names_videos_below_2160(self) -> None:
-        missing = videos_missing_4k([("A", 2160), ("B", 1080), ("C", None)])
-        self.assertEqual(missing, ["B", "C"])
-
-    def test_all_4k_is_empty(self) -> None:
-        self.assertEqual(videos_missing_4k([("A", 2160), ("B", 3840)]), [])
 
 
 class ChannelUrlTests(unittest.TestCase):

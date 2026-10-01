@@ -3,7 +3,6 @@
 from app.models import Clip
 from app.timeparse import parse_timestamp
 
-FOUR_K_HEIGHT = 2160
 # Each clip can exist three times on disk (download, prepared part, joined
 # file), so these bound how much one export can write.
 MAX_CLIPS = 100
@@ -33,8 +32,3 @@ def validate_timeline(clips: list[Clip]) -> list[Clip]:
         raise ValueError(f"An export can be at most {hours} hours long. Shorten or remove clips.")
 
     return sorted(clips, key=lambda clip: clip.order)
-
-
-def videos_missing_4k(heights: list[tuple[str, int | None]]) -> list[str]:
-    """Titles whose known height is below 2160, or whose height was not reported."""
-    return [title for title, height in heights if height is None or height < FOUR_K_HEIGHT]

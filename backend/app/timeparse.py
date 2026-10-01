@@ -15,12 +15,3 @@ def parse_timestamp(value: str) -> float:
     if minutes > 59 or seconds > 59:
         raise ValueError(f"Invalid clock time {value!r}")
     return float(hours * 3600 + minutes * 60 + seconds)
-
-
-def format_timestamp(seconds: float) -> str:
-    total = int(seconds)
-    hours, rem = divmod(total, 3600)
-    minutes, secs = divmod(rem, 60)
-    if hours:
-        return f"{hours}:{minutes:02d}:{secs:02d}"
-    return f"{minutes:02d}:{secs:02d}"

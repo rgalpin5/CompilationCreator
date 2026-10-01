@@ -6,14 +6,6 @@ from typing import NamedTuple
 from app.media.probe import StreamLayout
 
 
-def layouts_match(layouts: list[StreamLayout | None]) -> bool:
-    """Whether every layout is present and identical to the first one."""
-    if not layouts or any(layout is None for layout in layouts):
-        return False
-    first = layouts[0]
-    return all(layout == first for layout in layouts)
-
-
 class Prep(NamedTuple):
     """How one clip should be prepared before it is joined."""
 

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from app.media.concat import concat_clips
-from app.media.plan import fit_4k, layouts_match, prep_plan
+from app.media.plan import fit_4k, prep_plan
 from app.media.probe import StreamLayout, probe_layout
 from app.youtube.download import use_concurrent_download
 
@@ -66,7 +66,8 @@ class StreamCopyTests(unittest.TestCase):
             _clip(first, "320x240")
             _clip(second, "320x240")
             layouts = [probe_layout(first), probe_layout(second)]
-            self.assertTrue(layouts_match(layouts))
+            self.assertIsNotNone(layouts[0])
+            self.assertEqual(layouts[0], layouts[1])
             concat_clips([first, second], output)
             joined = probe_layout(output)
             self.assertIsNotNone(joined)
@@ -83,7 +84,7 @@ class StreamCopyTests(unittest.TestCase):
             second = root / "b.mp4"
             _clip(first, "320x240")
             _clip(second, "640x480")
-            self.assertFalse(layouts_match([probe_layout(first), probe_layout(second)]))
+            self.assertNotEqual(probe_layout(first), probe_layout(second))
 
 
 class PrepPlanTests(unittest.TestCase):

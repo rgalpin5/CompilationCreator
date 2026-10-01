@@ -1,4 +1,4 @@
-export const DEFAULT_CLIP_SECONDS = 30 * 60;
+const DEFAULT_CLIP_SECONDS = 30 * 60;
 
 const MM_SS = /^(\d{1,2}):([0-5]\d)$/;
 const HH_MM_SS = /^(\d+):([0-5]\d):([0-5]\d)$/;
