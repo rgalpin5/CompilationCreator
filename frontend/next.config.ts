@@ -7,7 +7,9 @@ const nextConfig: NextConfig = {
     ? {
         output: "export" as const,
         images: { unoptimized: true },
-        env: { NEXT_PUBLIC_API_URL: "" },
+        // Write studio/index.html so the desktop server's static mount finds it.
+        trailingSlash: true,
+        env: { NEXT_PUBLIC_API_URL: "", NEXT_PUBLIC_EDITION: "desktop" },
       }
     : {}),
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { YouTubeSession } from "./YouTubeSession";
 
 type Props = {
@@ -24,12 +24,9 @@ export default function ClipPlayer({
   onChange,
 }: Props) {
   return (
-    <Card id="clip-player" className="scroll-mt-4 shadow-sm">
+    <Card id="clip-player" className="scroll-mt-18 ring-border">
       <CardHeader className="border-b">
         <CardTitle className="line-clamp-2">{title}</CardTitle>
-        <CardDescription>
-          Play until the intro ends, then cut it. Jump to the ending and cut the outro the same way.
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <YouTubeSession

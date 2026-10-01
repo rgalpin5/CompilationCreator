@@ -23,7 +23,7 @@ export default function ChannelForm({ loading, error, onSubmit }: Props) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-2 rounded-xl bg-card p-3 shadow-sm ring-1 ring-foreground/10"
+      className="flex flex-col gap-2 rounded-xl bg-card p-3 ring-1 ring-border"
     >
       <div className="flex gap-2">
         <Input
@@ -33,8 +33,9 @@ export default function ChannelForm({ loading, error, onSubmit }: Props) {
           onChange={(e) => setUrl(e.target.value)}
           aria-label="YouTube channel URL"
           disabled={loading}
+          className="h-10 font-mono text-sm"
         />
-        <Button type="submit" disabled={loading || !url.trim()}>
+        <Button type="submit" className="h-10 px-4" disabled={loading || !url.trim()}>
           {loading ? "Loading…" : "Load videos"}
         </Button>
       </div>

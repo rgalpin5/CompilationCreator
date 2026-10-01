@@ -45,8 +45,8 @@ export default function VideoGrid({
   if (videos.length === 0) {
     if (loading) return null;
     return (
-      <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed bg-card px-6 text-center text-sm text-muted-foreground">
-        No videos loaded yet. Enter a channel URL above.
+      <div className="bg-frame-grid flex min-h-56 items-center justify-center rounded-xl border border-dashed px-6 text-center text-sm text-muted-foreground">
+        Paste a channel link above to load its videos.
       </div>
     );
   }

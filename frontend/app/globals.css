@@ -9,7 +9,9 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display), var(--font-sans);
+  --color-keep: var(--keep);
+  --color-cut: var(--cut);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -50,38 +52,42 @@
 
 :root,
 .dark {
-  --background: oklch(0.16 0.015 260);
-  --foreground: oklch(0.96 0.01 260);
-  --card: oklch(0.21 0.016 260);
-  --card-foreground: oklch(0.96 0.01 260);
-  --popover: oklch(0.21 0.016 260);
-  --popover-foreground: oklch(0.96 0.01 260);
-  --primary: oklch(0.62 0.14 255);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.27 0.015 260);
-  --secondary-foreground: oklch(0.96 0.01 260);
-  --muted: oklch(0.27 0.015 260);
-  --muted-foreground: oklch(0.74 0.02 260);
-  --accent: oklch(0.27 0.015 260);
-  --accent-foreground: oklch(0.96 0.01 260);
-  --destructive: oklch(0.65 0.19 25);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.62 0.14 255);
-  --chart-1: oklch(0.62 0.14 255);
-  --chart-2: oklch(0.7 0.12 180);
-  --chart-3: oklch(0.75 0.12 80);
-  --chart-4: oklch(0.65 0.16 25);
-  --chart-5: oklch(0.7 0.12 320);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.21 0.016 260);
-  --sidebar-foreground: oklch(0.96 0.01 260);
-  --sidebar-primary: oklch(0.62 0.14 255);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.27 0.015 260);
-  --sidebar-accent-foreground: oklch(0.96 0.01 260);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.62 0.14 255);
+  /* Cool ink-navy surfaces, mint for action and selection, sky blue for
+     footage that is kept, rose for footage that is cut. */
+  --background: oklch(0.16 0.018 255);
+  --foreground: oklch(0.96 0.008 240);
+  --card: oklch(0.2 0.022 255);
+  --card-foreground: oklch(0.96 0.008 240);
+  --popover: oklch(0.215 0.022 255);
+  --popover-foreground: oklch(0.96 0.008 240);
+  --primary: oklch(0.86 0.13 168);
+  --primary-foreground: oklch(0.2 0.03 220);
+  --secondary: oklch(0.255 0.022 255);
+  --secondary-foreground: oklch(0.96 0.008 240);
+  --muted: oklch(0.25 0.022 255);
+  --muted-foreground: oklch(0.74 0.02 245);
+  --accent: oklch(0.28 0.024 255);
+  --accent-foreground: oklch(0.96 0.008 240);
+  --destructive: oklch(0.7 0.17 15);
+  --border: oklch(0.9 0.03 240 / 11%);
+  --input: oklch(0.9 0.03 240 / 15%);
+  --ring: oklch(0.86 0.13 168);
+  --keep: oklch(0.76 0.12 235);
+  --cut: oklch(0.7 0.17 15);
+  --chart-1: oklch(0.86 0.13 168);
+  --chart-2: oklch(0.76 0.12 235);
+  --chart-3: oklch(0.7 0.17 15);
+  --chart-4: oklch(0.82 0.12 95);
+  --chart-5: oklch(0.72 0.13 300);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.2 0.022 255);
+  --sidebar-foreground: oklch(0.96 0.008 240);
+  --sidebar-primary: oklch(0.86 0.13 168);
+  --sidebar-primary-foreground: oklch(0.2 0.03 220);
+  --sidebar-accent: oklch(0.28 0.024 255);
+  --sidebar-accent-foreground: oklch(0.96 0.008 240);
+  --sidebar-border: oklch(0.9 0.03 240 / 11%);
+  --sidebar-ring: oklch(0.86 0.13 168);
   color-scheme: dark;
 }
 
@@ -94,5 +100,42 @@
   }
   html {
     @apply font-sans;
+  }
+}
+/* Diagonal hatching marks footage that is cut away. */
+@utility bg-hatch-cut {
+  background-color: color-mix(in oklch, var(--cut) 14%, transparent);
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--cut) 55%, transparent) 0 1.5px,
+    transparent 1.5px 6px
+  );
+}
+
+/* A faint frame grid behind hero areas, like a monitor's safe-area guides. */
+@utility bg-frame-grid {
+  background-image:
+    linear-gradient(to right, oklch(0.9 0.03 240 / 5%) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0.9 0.03 240 / 5%) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+@keyframes playhead-sweep {
+  from {
+    left: 0%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@utility animate-playhead {
+  animation: playhead-sweep 9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-playhead {
+    animation: none;
+    left: 38%;
   }
 }

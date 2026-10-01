@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import TrimStrip from "@/components/TrimStrip";
 import ExportBar from "@/features/export/ExportBar";
 import ClipPlayer from "@/features/player/ClipPlayer";
 import type { TimelineClip } from "@/features/timeline/types";
@@ -49,12 +49,12 @@ export default function CutStep({
   if (!clip) return null;
 
   return (
-    <div id="cut-step" className="flex scroll-mt-4 flex-col gap-4">
+    <div id="cut-step" className="flex scroll-mt-18 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-medium">Cut intros and outros</h2>
-          <p className="text-sm text-muted-foreground">
-            Video {index + 1} of {clips.length}. The download starts after this step.
+          <h2 className="font-heading text-xl font-semibold">Cut intros and outros</h2>
+          <p className="font-mono text-xs text-muted-foreground tabular-nums">
+            Clip {index + 1} / {clips.length}
           </p>
         </div>
         <Button type="button" variant="outline" onClick={onBack} disabled={busy}>
@@ -93,11 +93,8 @@ export default function CutStep({
           </div>
         </div>
 
-        <Card className="h-fit shadow-sm lg:sticky lg:top-4">
-          <CardHeader className="border-b">
-            <CardTitle>Clips</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+        <aside className="flex h-fit flex-col gap-4 rounded-xl bg-card p-4 ring-1 ring-border lg:sticky lg:top-18">
+          <h2 className="border-b pb-3 font-heading text-base font-semibold">Clips</h2>
             <ol className="flex flex-col gap-2">
               {clips.map((item, i) => {
                 const start = parseTime(item.start) ?? 0;
@@ -114,15 +111,22 @@ export default function CutStep({
                       onClick={() => onIndex(i)}
                       aria-current={i === index ? "true" : undefined}
                       className={cn(
-                        "flex w-full flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left text-sm",
-                        i === index ? "bg-primary/15 ring-1 ring-primary" : "hover:bg-muted",
+                        "flex w-full flex-col gap-1.5 rounded-lg px-2.5 py-2 text-left text-sm",
+                        i === index ? "bg-primary/12 ring-1 ring-primary/70" : "hover:bg-muted",
                       )}
                     >
-                      <span>
-                        <span className="mr-1.5 text-muted-foreground">{i + 1}.</span>
+                      <span className="line-clamp-2">
+                        <span className="mr-1.5 font-mono text-xs text-muted-foreground">{i + 1}</span>
                         {item.title}
                       </span>
-                      <span className="text-xs text-muted-foreground tabular-nums">
+                      {item.duration_seconds != null && (
+                        <TrimStrip
+                          duration={item.duration_seconds}
+                          start={start}
+                          end={end ?? item.duration_seconds}
+                        />
+                      )}
+                      <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
                         {start > 0 ? `${formatSeconds(start)} intro` : "No intro"}
                         {" · "}
                         {outro > 0 ? `${formatSeconds(outro)} outro` : "No outro"}
@@ -145,8 +149,7 @@ export default function CutStep({
               saving={saving}
               onDownload={onDownload}
             />
-          </CardContent>
-        </Card>
+        </aside>
       </div>
     </div>
   );

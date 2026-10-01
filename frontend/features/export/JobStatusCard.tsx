@@ -28,7 +28,8 @@ export default function JobStatusCard({
   return (
     <div className={cn("flex flex-col gap-1 rounded-lg px-3 py-2 text-sm", statusTone(job.status))}>
       <p>
-        Status: <span className="font-medium capitalize">{job.status}</span>
+        <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">Status</span>{" "}
+        <span className="font-medium capitalize">{job.status}</span>
         {job.progress ? ` — ${job.progress}` : null}
       </p>
       {job.status === "cancelled" && <p>Export cancelled. Partial downloads were deleted.</p>}
@@ -81,8 +82,8 @@ export default function JobStatusCard({
 }
 
 function statusTone(status: JobStatus): string {
-  if (status === "ready" || status === "saved") return "bg-emerald-500/15 text-emerald-200";
-  if (status === "failed") return "bg-red-500/15 text-red-200";
+  if (status === "ready" || status === "saved") return "bg-keep/12 text-foreground ring-1 ring-keep/40";
+  if (status === "failed") return "bg-destructive/12 text-foreground ring-1 ring-destructive/40";
   if (status === "cancelled") return "bg-muted text-muted-foreground";
-  return "bg-primary/10 text-foreground";
+  return "bg-primary/10 text-foreground ring-1 ring-primary/30";
 }

@@ -40,23 +40,25 @@ export default function ExportBar({
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="flex items-start gap-2 text-sm">
+      <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-muted/60 px-3 py-2 text-sm has-disabled:cursor-not-allowed has-disabled:opacity-60">
+        <span>
+          Export in 4K
+          <span className="block text-xs text-muted-foreground">3840×2160; smaller videos are scaled up.</span>
+        </span>
         <input
           type="checkbox"
-          className="mt-1"
+          role="switch"
+          className="peer sr-only"
           checked={output4k}
           disabled={busy}
           onChange={(event) => onOutput4kChange(event.target.checked)}
         />
-        <span>
-          Export in 4K
-          <span className="block text-muted-foreground">
-            The finished file is 3840×2160. A smaller video is scaled up to that size. The picture
-            stays the same.
-          </span>
-        </span>
+        <span
+          aria-hidden="true"
+          className="relative h-5 w-9 shrink-0 rounded-full bg-foreground/20 transition-colors peer-checked:bg-primary peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50 after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-foreground after:transition-transform peer-checked:after:translate-x-4 peer-checked:after:bg-primary-foreground"
+        />
       </label>
-      <Button type="button" onClick={onExport} disabled={busy}>
+      <Button type="button" size="lg" className="h-10 text-sm" onClick={onExport} disabled={busy}>
         {busy ? "Exporting…" : exportLabel}
       </Button>
       {busy && !showConfirm && (
@@ -85,10 +87,7 @@ export default function ExportBar({
         </div>
       )}
       {busy && (
-        <p className="text-sm text-muted-foreground">
-          Clips download together, and matching videos are copied without re-encoding. A clip is
-          re-encoded only when its picture or audio does not match the others. Keep this page open.
-        </p>
+        <p className="text-xs text-muted-foreground">Keep this page open until the export finishes.</p>
       )}
 
       {validationError && <p className="text-sm text-destructive">{validationError}</p>}

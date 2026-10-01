@@ -71,16 +71,16 @@ export default function TrimBar({
       <div className="relative h-8">
         <div
           ref={trackRef}
-          className="absolute inset-x-0 top-3 h-2 cursor-pointer rounded-full bg-foreground/15 touch-none"
+          className="absolute inset-x-0 top-2.5 h-3 cursor-pointer overflow-hidden rounded-full bg-hatch-cut touch-none"
           onPointerDown={(event) => beginDrag(event, onSeek)}
         >
           <div
-            className="absolute inset-y-0 rounded-full bg-primary"
+            className="absolute inset-y-0 bg-keep"
             style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
           />
         </div>
         <div
-          className="pointer-events-none absolute top-1 h-6 w-0.5 bg-foreground"
+          className="pointer-events-none absolute top-0.5 h-7 w-0.5 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_8px_var(--primary)]"
           style={{ left: `${playPct}%` }}
         />
         <Handle
@@ -106,9 +106,9 @@ export default function TrimBar({
           }}
         />
       </div>
-      <div className="flex justify-between text-[11px] text-muted-foreground tabular-nums">
+      <div className="flex justify-between font-mono text-[11px] text-muted-foreground tabular-nums">
         <span>Start {formatSeconds(start)}</span>
-        <span>{formatSeconds(end - start)} kept</span>
+        <span className="text-keep">{formatSeconds(end - start)} kept</span>
         <span>End {formatSeconds(end)}</span>
       </div>
     </div>
@@ -144,7 +144,7 @@ function Handle({
       disabled={disabled}
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
-      className="absolute top-1 size-4 -translate-x-1/2 rounded-full border-2 border-primary bg-background shadow-sm touch-none disabled:opacity-50"
+      className="absolute top-1 h-6 w-2.5 -translate-x-1/2 cursor-ew-resize rounded-sm border-2 border-foreground bg-background shadow-md touch-none focus-visible:ring-3 focus-visible:ring-ring/60 focus-visible:outline-none disabled:opacity-50"
       style={{ left: `${percent}%` }}
     />
   );
