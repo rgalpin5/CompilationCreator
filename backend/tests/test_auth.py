@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from app import auth
 from app.auth import file_token, require_password_when_hosted
-from app.config import settings
+from app.config import Settings, settings
 from app.errors import ConfigurationError
 from app.throttle import FailureThrottle
 from tests.asgi import call
@@ -188,6 +188,55 @@ class PasswordTests(unittest.TestCase):
             require_password_when_hosted()
         with patch.object(settings, "hosted", False), patch.object(settings, "password", None):
             require_password_when_hosted()
+
+    def test_trusted_proxy_hops_picks_the_entry_that_far_from_the_right(self) -> None:
+        def address(forwarded: str | None, hops: int) -> str:
+            headers = {"X-Forwarded-For": forwarded} if forwarded is not None else {}
+            scope = {
+                "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()],
+                "client": ("192.0.2.1", 50000),
+            }
+            with (
+                patch.object(settings, "hosted", True),
+                patch.object(settings, "trusted_proxy_hops", hops),
+            ):
+                return auth._client_address(scope)
+
+        chain = "203.0.113.9, 198.51.100.7, 35.191.0.1"
+        self.assertEqual(address(chain, 1), "35.191.0.1")
+        self.assertEqual(address(chain, 2), "198.51.100.7")
+        self.assertEqual(address(chain, 3), "203.0.113.9")
+        # Fewer entries than hops falls back to the leftmost entry.
+        self.assertEqual(address("198.51.100.7, 35.191.0.1", 3), "198.51.100.7")
+        # No header falls back to the socket client.
+        self.assertEqual(address(None, 2), "192.0.2.1")
+
+    def test_hosted_server_behind_a_load_balancer_throttles_each_caller(self) -> None:
+        def guess(caller: str) -> int:
+            headers = {"Authorization": "Bearer nope", "X-Forwarded-For": f"{caller}, 35.191.0.1"}
+            return call("/api/session", headers=headers)[0]
+
+        with (
+            patch.object(settings, "password", _SECRET),
+            patch.object(settings, "hosted", True),
+            patch.object(settings, "trusted_proxy_hops", 2),
+        ):
+            statuses = [guess("203.0.113.1") for _ in range(6)]
+            other = guess("203.0.113.2")
+        self.assertEqual(statuses, [401] * 5 + [429])
+        self.assertEqual(other, 401)
+
+    def test_bad_trusted_proxy_hops_are_refused(self) -> None:
+        for raw in ("0", "-1", "two", "1.5"):
+            with (
+                patch.dict("os.environ", {"COMPCREATOR_TRUSTED_PROXY_HOPS": raw}),
+                self.assertRaisesRegex(ConfigurationError, "COMPCREATOR_TRUSTED_PROXY_HOPS"),
+            ):
+                Settings()
+        with patch.dict("os.environ", {"COMPCREATOR_TRUSTED_PROXY_HOPS": " 3 "}):
+            self.assertEqual(Settings().trusted_proxy_hops, 3)
+        with patch.dict("os.environ", {"COMPCREATOR_TRUSTED_PROXY_HOPS": ""}):
+            self.assertEqual(Settings().trusted_proxy_hops, 1)
 
 
 if __name__ == "__main__":

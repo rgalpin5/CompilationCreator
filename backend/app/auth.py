@@ -91,13 +91,18 @@ def _sent_credentials(scope: Scope) -> bool:
 def _client_address(scope: Scope) -> str:
     """The caller's IP address, as seen by the hosting platform's proxy when hosted."""
     if settings.hosted:
-        # The platform appends the address it saw to whatever the caller sent,
-        # so only the last entry can be trusted.
+        # Each trusted proxy appends the address it saw to whatever the caller
+        # sent, so the entry that many places from the right is the caller.
+        # Cloud Run's own URL is one hop; a load balancer or CDN in front adds
+        # one each (COMPCREATOR_TRUSTED_PROXY_HOPS).
         for name, value in scope.get("headers", []):
             if name == b"x-forwarded-for":
-                last: str = value.decode("latin-1").rsplit(",", 1)[-1].strip()
-                if last:
-                    return last
+                entries: list[str] = [item.strip() for item in value.decode("latin-1").split(",")]
+                hops = settings.trusted_proxy_hops
+                # Fewer entries than hops: the leftmost is the closest we have.
+                chosen = entries[-hops] if len(entries) >= hops else entries[0]
+                if chosen:
+                    return chosen
     client = scope.get("client")
     return str(client[0]) if client else "unknown"
 
