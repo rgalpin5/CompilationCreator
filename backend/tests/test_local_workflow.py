@@ -200,6 +200,8 @@ class LocalWorkflowTests(unittest.TestCase):
             with (
                 patch("app.compilation.pipeline.download_section", _fake_download),
                 patch("app.compilation.pipeline.probe_layout", _same_layout),
+                # Kept so the steps' files can be checked below.
+                patch("app.compilation.pipeline._remove_working_files") as cleanup,
             ):
                 job_id = _run_export(
                     jobs,
@@ -240,6 +242,7 @@ class LocalWorkflowTests(unittest.TestCase):
             self.assertIsNotNone(stored)
             assert stored is not None
             job_dir = Path(stored["dir"])
+            cleanup.assert_called_once_with(job_dir, keep=job_dir / "compilation.mp4")
             self.assertEqual((job_dir / "raw_001.mp4").read_bytes(), b"abcdefghijk 10-40")
             self.assertEqual((job_dir / "raw_002.mp4").read_bytes(), b"abcdefghijl 5-25")
             self.assertEqual((job_dir / "part_001.mp4").read_bytes(), b"abcdefghijk 10-40")

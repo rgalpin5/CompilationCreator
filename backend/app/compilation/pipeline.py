@@ -213,6 +213,22 @@ def _join(
     return output
 
 
+def _remove_working_files(job_dir: Path, *, keep: Path) -> None:
+    """Delete everything in ``job_dir`` except ``keep``.
+
+    A ready job can wait up to a day for its download, and on Cloud Run the
+    job folder is held in memory, so the raw clips and parts must not wait
+    with it.
+    """
+    for entry in job_dir.iterdir():
+        if entry == keep:
+            continue
+        if entry.is_dir():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            entry.unlink(missing_ok=True)
+
+
 def _finish(
     store: JobStore,
     job_id: str,
@@ -307,6 +323,7 @@ def _export(
         raws = _download_all(store, job_id, ordered, job_dir, output_4k)
         parts = _prepare_all(store, job_id, raws, job_dir, output_4k)
         output = _join(store, job_id, parts, raws, job_dir, output_4k)
+        _remove_working_files(job_dir, keep=output)
         _finish(store, job_id, ordered, output, job_dir, usage)
     except JobCancelled:
         shutil.rmtree(job_dir, ignore_errors=True)
