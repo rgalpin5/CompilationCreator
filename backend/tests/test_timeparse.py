@@ -1,10 +1,10 @@
 import unittest
 from unittest.mock import patch
 
+from app.compilation.validate import validate_timeline, videos_missing_4k
 from app.models import Clip
-from app.services.compiler import validate_timeline, videos_missing_4k
-from app.services.ytdlp_service import ChannelError, normalize_channel_url
-from app.timeparse import parse_timestamp
+from app.timeparse import format_timestamp, parse_timestamp
+from app.youtube.urls import ChannelError, normalize_channel_url
 
 
 class TimeParseTests(unittest.TestCase):
@@ -22,6 +22,16 @@ class TimeParseTests(unittest.TestCase):
             parse_timestamp("15")
         with self.assertRaises(ValueError):
             parse_timestamp("1:2:3")
+
+    def test_format_mm_ss_and_hours(self) -> None:
+        self.assertEqual(format_timestamp(0), "00:00")
+        self.assertEqual(format_timestamp(15), "00:15")
+        self.assertEqual(format_timestamp(65.9), "01:05")
+        self.assertEqual(format_timestamp(3723), "1:02:03")
+
+    def test_format_round_trips_through_parse(self) -> None:
+        self.assertEqual(parse_timestamp(format_timestamp(3723)), 3723)
+        self.assertEqual(parse_timestamp(format_timestamp(65)), 65)
 
 
 class TimelineTests(unittest.TestCase):
@@ -41,10 +51,9 @@ class TimelineTests(unittest.TestCase):
         clip = Clip(video_id="abcdefghijk", title="Episode", start="00:00", end="30:00", order=0)
         self.assertEqual(validate_timeline([clip])[0].title, "Episode")
 
-    def test_rejects_clip_over_thirty_five_minutes(self) -> None:
-        clip = Clip(video_id="abcdefghijk", title="Long", start="00:00", end="35:01", order=0)
-        with self.assertRaises(ValueError):
-            validate_timeline([clip])
+    def test_allows_clip_over_thirty_five_minutes(self) -> None:
+        clip = Clip(video_id="abcdefghijk", title="Long", start="00:00", end="1:10:00", order=0)
+        self.assertEqual(validate_timeline([clip])[0].title, "Long")
 
 
 class FourKTests(unittest.TestCase):
@@ -83,14 +92,14 @@ class ChannelUrlTests(unittest.TestCase):
             def __enter__(self) -> "FakeYDL":
                 return self
 
-            def __exit__(self, exc_type, exc, tb) -> bool:
-                return False
+            def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
+                return None
 
             def extract_info(self, url: str, download: bool = False) -> dict:
                 return {"uploader_url": "https://www.youtube.com/@somechannel"}
 
         expected = "https://www.youtube.com/@somechannel/videos"
-        with patch("app.services.ytdlp_service.yt_dlp.YoutubeDL", FakeYDL):
+        with patch("app.youtube.urls.yt_dlp.YoutubeDL", FakeYDL):
             self.assertEqual(
                 normalize_channel_url("https://www.youtube.com/watch?v=abcdefghijk"),
                 expected,
@@ -112,13 +121,13 @@ class ChannelUrlTests(unittest.TestCase):
             def __enter__(self) -> "FakeYDL":
                 return self
 
-            def __exit__(self, exc_type, exc, tb) -> bool:
-                return False
+            def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
+                return None
 
             def extract_info(self, url: str, download: bool = False) -> dict:
                 return {"channel_url": "https://www.youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaa"}
 
-        with patch("app.services.ytdlp_service.yt_dlp.YoutubeDL", FakeYDL):
+        with patch("app.youtube.urls.yt_dlp.YoutubeDL", FakeYDL):
             self.assertEqual(
                 normalize_channel_url("https://www.youtube.com/watch?v=abcdefghijk"),
                 "https://www.youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaa/videos",

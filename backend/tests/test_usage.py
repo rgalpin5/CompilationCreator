@@ -2,8 +2,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from app.services.usage_store import UsageStore
+from app.usage.store import UsageStore
 
 
 class UsageStoreTests(unittest.TestCase):
@@ -13,7 +14,13 @@ class UsageStoreTests(unittest.TestCase):
             store = UsageStore(path)
             store.record(
                 [
-                    {"video_id": "abcdefghijk", "title": "One", "channel": "Dash", "view_count": 600000, "duration_seconds": 891},
+                    {
+                        "video_id": "abcdefghijk",
+                        "title": "One",
+                        "channel": "Dash",
+                        "view_count": 600000,
+                        "duration_seconds": 891,
+                    },
                     {"video_id": "abcdefghijk", "title": "One"},
                     {"video_id": "abcdefghijl", "title": "Two"},
                 ],
@@ -43,3 +50,20 @@ class UsageStoreTests(unittest.TestCase):
             videos = store.logs()["videos"]
             self.assertEqual(videos[0]["title"], "abcdefghijk")
             self.assertEqual(videos[0]["last_used"], None)
+
+    def test_failed_save_keeps_the_previous_log(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "usage.json"
+            store = UsageStore(path)
+            store.record([{"video_id": "abcdefghijk", "title": "One"}])
+            before = path.read_text(encoding="utf-8")
+
+            with (
+                patch("app.usage.store.os.replace", side_effect=OSError("disk full")),
+                self.assertRaises(OSError),
+            ):
+                store.record([{"video_id": "abcdefghijl", "title": "Two"}])
+
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertEqual([item.name for item in Path(tmp).iterdir()], ["usage.json"])
+            self.assertEqual(UsageStore(path).count("abcdefghijk"), 1)

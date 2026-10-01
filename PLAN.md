@@ -11,7 +11,7 @@ YouTube’s terms restrict downloading. This app is for the user’s own persona
 - **Download link:** `GET /compilations/{job_id}/download` streams the finished MP4. Files live under a temp jobs directory on the instance. A GCS signed-URL stub is commented for a later Cloud Run deploy.
 - **No auth.** Single-user local / personal Cloud Run service.
 - **Channel listing cap:** default 24 most recent uploads, overridable with `?limit=` (max 50).
-- **Clip guardrails:** at least 1 clip, start before end, each clip at most 10 minutes, total timeline at most 30 minutes.
+- **Clip guardrails:** at least 1 clip, start before end. Any number of videos.
 
 ## Architecture
 

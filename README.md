@@ -1,103 +1,215 @@
 # CompCreator
 
-A personal tool for building mega compilations from a YouTube channel. Paste a channel URL, pick 4–8 videos of about 20–30 minutes each, trim them, reorder them, and export one long mp4.
+CompCreator builds one MP4 from videos on a YouTube channel. Paste a channel URL, choose the videos, cut each intro and outro, reorder the timeline, and export a single file. A log records which videos have already been used and which compilations have been finished.
 
-YouTube's Terms of Service restrict downloading content. Use this only for videos you own or otherwise have the right to download and reuse.
+This is a personal tool. There is no authentication. YouTube’s Terms of Service restrict downloading content. Use it only for videos you own or otherwise have the right to download and reuse.
 
-This is for personal use. There is no authentication.
+## What the app does
 
-## Desktop app
+The interface is one page with two views.
 
-The installers are already in this repository. Download the one for your computer. You do not need to build it.
+**Editor**
 
-- macOS: [dist/CompCreator-mac.dmg](dist/CompCreator-mac.dmg)
-- Windows: [dist/CompCreator-windows.exe](dist/CompCreator-windows.exe)
+1. Load a channel. The first page is 24 videos. Scrolling loads the next page, up to 50 videos per request.
+2. Click a thumbnail to add it to the timeline. Click it again to remove it. Reorder with the up and down controls.
+3. Open the cut step. Each clip plays in an embedded YouTube player. Mark where the intro ends and where the outro begins, or keep the full video.
+4. Start the export. Clips download together. Matching picture and audio are joined by stream copy. A clip is re-encoded only when its picture or audio does not match the others. Optional 4K output writes a 3840×2160 file and scales smaller sources up to that frame; it does not invent detail.
+5. When the job is ready, save the MP4 to Downloads or to a folder you type. Saving copies the finished file out, then deletes the working clips for that job.
 
-Install the build for your computer and open it. The window is the app. It does not use a shared YouTube login: downloads use the browser signed in on that machine. Finished compilations are kept in the app's folder on that computer, and the Download button in the window saves a copy as well.
+A pasted video URL (`/watch`, `/shorts`, `/live`, `/embed`, or `youtu.be`) is resolved to that uploader’s channel. Handles (`@name`), `/channel/UC…`, `/c/…`, and `/user/…` URLs are accepted. Playlists are rejected.
 
-The first time a download runs, macOS may ask for Keychain access so the app can read that browser's YouTube cookies. Allow it. Chrome is used when it is installed, then Brave, Edge, Firefox, and Safari. Set `YTDLP_COOKIES_BROWSER` to one of those names before launching if you want a different one, or `none` to skip browser cookies.
+**Logs**
 
-### macOS
+After an export finishes, the app records each distinct video once and names the compilation from the local date and time (for example `29 Sep, 17:04.mp4`). The Logs view searches and sorts that history. The last 200 compilations are kept.
 
-1. Open `CompCreator-mac.dmg`.
-2. Drag `CompCreator` onto Applications.
-3. The first time, Control-click the app and choose Open, then Open again. macOS blocks an unsigned app on a double-click.
-4. Finished compilations are in `~/Library/Application Support/CompCreator/jobs`. If the window fails to open, the log is `desktop.log` in that same CompCreator folder.
+## Architecture
 
-### Windows
+```text
+Browser or desktop window
+        │
+        ▼
+Next.js UI  ──HTTP──►  FastAPI
+                         │
+                         ├─ yt-dlp     list a channel, download clips
+                         ├─ ffmpeg     trim, match formats, concatenate
+                         └─ local disk job folders + usage.json
+```
 
-1. Download `CompCreator-windows.exe` and double-click it. That file is the whole app.
-2. If Windows SmartScreen appears, choose More info, then Run anyway.
-3. Windows 11 already includes the WebView2 runtime the window needs. On Windows 10, install [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) if the window does not open.
-4. Finished compilations are in `%APPDATA%\CompCreator\jobs`. The log is `desktop.log` in that same CompCreator folder.
+An export does not run inside the HTTP request that starts it. `POST /api/compilations` validates the timeline, creates a job, and returns `202` with a job id. A background task then moves the job through `queued` → `downloading` → `concatenating` → `ready`. Failure sets `failed`. Cancel sets `cancelled` and deletes the job folder. Saving a finished file sets `saved`.
 
-## Layout
+The UI polls `GET /api/compilations/{job_id}` every two seconds until the job leaves the active states. Keep the page open while an export runs. A long compilation needs substantial disk space: each clip can exist as a raw download, a prepared part, and the joined file until you save.
 
-- `backend/`: FastAPI app (`app.main:app`). Uses yt-dlp to list and download videos and ffmpeg to trim and concatenate.
-- `frontend/`: Next.js (App Router) UI.
-- `packaging/`: builds the macOS and Windows apps.
-- `docker-compose.yml`: runs the backend only.
+### Download and join strategy
 
-## Limits
+For each clip the backend chooses one of two downloads:
 
-- Videos per compilation: up to 8. The editor is aimed at 4–8.
-- Each video: at most 35 minutes (so a video that runs a little past 30:00 still fits).
-- Whole compilation: at most 4 hours 40 minutes (eight 35-minute videos).
-- Adding a video fills the end time with its full length when that length is known, otherwise 30:00.
-- An export downloads its clips together, then joins matching clips by stream copy without re-encoding. Only a clip whose picture or audio track does not match is re-encoded, and only that track. A 3–4 hour compilation needs substantial disk space and can take a long time. Keep the page open while it runs.
-- Channel listing: 24 videos by default, 50 maximum (`?limit=` on `POST /api/channels`).
+- **Whole video, then a local trim**, when the duration is unknown, when the unused portion is 90 seconds or less, or when the kept span is at least 15% of the video. The download uses 16 concurrent fragments. ffmpeg then stream-copies the requested range. A clip that already covers essentially the whole file is renamed instead of trimmed.
+- **Section download**, when the clip is a small slice of a long upload. yt-dlp requests that range directly.
+
+Format selection prefers H.264 video and AAC audio at or below 1080p, or at or below 2160p when 4K output is on, so later clips can be copied instead of re-encoded.
+
+Before the join, each file is probed. The most common picture layout (codec, size, pixel format, frame rate) and the most common audio layout on that picture become the target. Each clip is then kept as-is, audio-re-encoded, or picture-re-encoded. The join uses the ffmpeg concat demuxer with stream copy. If that fails, every clip is normalized to H.264, AAC, 30 fps, and either 1920×1080 or 3840×2160, then copied. If the copy still fails, the clips are joined with the concat filter and a re-encode.
+
+### YouTube access
+
+Listing and downloading go through the `yt-dlp` Python library in-process. A cookie source is optional and is resolved in this order:
+
+1. `YTDLP_COOKIES_FILE` — path to a Netscape `cookies.txt`.
+2. `YTDLP_COOKIES` — the file contents, or those contents encoded as base64.
+3. `YTDLP_COOKIES_BROWSER` — browser name (`chrome`, `brave`, `edge`, `firefox`, `safari`). The desktop app sets this to the first installed browser, unless it is `none`.
+
+When cookies are sent, yt-dlp must solve YouTube’s player challenge. That requires Deno 2.3 or newer. Set `YTDLP_DENO` to the binary if it is not on `PATH` or in the usual install locations (`~/.deno/bin`, Homebrew on macOS).
+
+The desktop app does not share a YouTube login. Each install reads cookies from a browser on that computer. The first download on macOS may prompt for Keychain access so the app can read those cookies. Allow it.
+
+## Tech stack
+
+| Layer | Choice |
+| --- | --- |
+| UI | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 |
+| UI kit | shadcn (`base-nova`), Base UI, class-variance-authority |
+| API | Python 3.12, FastAPI, Pydantic v2, Uvicorn |
+| Media | yt-dlp, ffmpeg, ffprobe |
+| Desktop window | pywebview, packaged with PyInstaller |
+| Hosted deploy | Vercel services: Next.js frontend plus FastAPI backend, with `/api` and `/health` rewritten to the backend |
+| Local container | Docker Compose runs the backend only (`python:3.12-slim` plus ffmpeg) |
+
+Job state is in memory. Finished files and the usage log are on local disk. Nothing is shared across processes or instances. Restarting the API drops in-flight jobs. The usage file survives if `JOBS_DIR` does.
+
+## Repository layout
+
+```text
+CompCreator/
+  backend/                 FastAPI application
+    app/main.py            app, CORS, router wiring, store startup
+    app/config.py          jobs directory and CORS
+    app/models.py          request and response models
+    app/timeparse.py       mm:ss and hh:mm:ss
+    app/hardware.py        CPU-sized download and encode pools
+    app/delivery.py        save path and the copy-then-delete handoff
+    app/desktop/           window, paths, browser, local server
+    app/routers/           channels, compilations, usage, store dependencies
+    app/youtube/           URL normalization, listing, cookies, download
+    app/media/             probe, prep plan, encode, concat
+    app/compilation/       timeline checks and the export pipeline
+    app/jobs/              job store and process runner
+    app/usage/             compilation log
+    app/stubs/             GCS, YouTube upload, and autopilot outlines
+    tests/                 unittest modules
+    Dockerfile
+    requirements.txt       runtime packages (mirrors pyproject.toml)
+    requirements-dev.txt   ruff and mypy
+    pyproject.toml         dependencies plus Ruff and mypy settings
+  frontend/                Next.js UI
+    app/page.tsx           editor and logs view switch
+    features/              channel, timeline, cuts, player, export, logs
+    components/ui/         shadcn
+    lib/api/               browser API client
+    lib/time.ts            client-side time checks
+  packaging/               desktop build (PyInstaller, bundled ffmpeg)
+  scripts/dev.py           shared local setup and run implementation
+  setup.sh                 macOS and Linux entry point
+  setup.bat                Windows entry point
+  docker-compose.yml       backend only
+  vercel.json              frontend and backend on one Vercel project
+  dist/                    desktop installers, when built
+```
 
 ## API
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/health` | Health check |
-| POST | `/api/channels` | List recent videos for a channel URL |
-| POST | `/api/compilations` | Start an export job (returns 202 with a job id) |
-| GET | `/api/compilations/{job_id}` | Job status and progress |
-| GET | `/api/compilations/{job_id}/download` | Download the finished mp4 |
+| `GET` | `/health` | `{ "ok": true }` |
+| `POST` | `/api/channels?limit=&offset=` | One page of videos for a channel URL |
+| `POST` | `/api/compilations` | Start an export. Returns `202` and a job |
+| `GET` | `/api/compilations/{job_id}` | Status and progress |
+| `POST` | `/api/compilations/{job_id}/cancel` | Stop a running export and delete its files |
+| `GET` | `/api/download-folder` | Default save folder (`~/Downloads`) |
+| `POST` | `/api/compilations/{job_id}/download` | Copy the MP4 to Downloads or `{"directory": "/full/path"}`, then delete the job folder |
+| `GET` | `/api/usage?ids=` | Compilation counts for up to 50 video ids |
+| `GET` | `/api/logs` | Video history and compilation history |
 
-Export is asynchronous: `POST /api/compilations` returns immediately and the compilation runs in a background task. Poll the status endpoint until `status` is `ready`, then fetch `download_url`.
+`limit` defaults to 24 and cannot exceed 50. `offset` is how many playlist items to skip. The channel response includes `next_offset` and `has_more`.
+
+A compilation body looks like this:
+
+```json
+{
+  "output_4k": false,
+  "clips": [
+    {
+      "video_id": "XXXXXXXXXXX",
+      "title": "Intro",
+      "start": "0:10",
+      "end": "0:40",
+      "order": 0
+    }
+  ]
+}
+```
+
+`video_id` must be an 11-character YouTube id. `start` and `end` are `mm:ss` or `hh:mm:ss`, and `end` must be after `start`. At least one clip is required. There is no maximum clip count.
+
+Job statuses: `queued`, `downloading`, `concatenating`, `ready`, `saved`, `failed`, `cancelled`. `download_url` is present only while the status is `ready`. `saved_path` is present after a successful save and is the only remaining copy.
 
 ## Environment variables
 
-Backend:
+Backend (`backend/app/config.py` and the yt-dlp helpers):
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated list of allowed origins |
-| `JOBS_DIR` | `backend/data/jobs` | Working files and finished mp4s |
+| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated browser origins |
+| `JOBS_DIR` | `backend/data/jobs` | Working files for an export. On Vercel the default is `/tmp/compcreator/jobs` because the bundle filesystem is read-only. The desktop app uses its Application Support jobs folder |
+| `YTDLP_COOKIES_FILE` | unset | Path to a Netscape cookies file |
+| `YTDLP_COOKIES` | unset | Cookie file contents, or the same contents in base64. A temp file is written with mode `0600` |
+| `YTDLP_COOKIES_BROWSER` | unset | Browser to read cookies from. `none` skips browser cookies. The desktop app fills this in |
+| `YTDLP_DENO` | discovered | Full path to Deno when cookies are used |
+| `COMPCREATOR_DESKTOP` | unset | Set by the desktop launcher |
 
 Frontend:
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Base URL of the backend. Inlined at build time. |
+| `NEXT_PUBLIC_API_URL` | empty | Base URL of the API. Leave it unset on Vercel so the browser calls `/api` on the same origin. Set `http://localhost:8000` for split local development. The value is inlined at build time |
+| `DESKTOP_EXPORT` | unset | `1` during `packaging/build.py`. Forces a static Next.js export and an empty API base so the window talks to the local server |
 
-See `.env.example` for a copy-paste starting point. For the frontend, put values in `frontend/.env.local`.
+Copy `.env.example` to `.env` in the repository root for the backend list. The API reads that file on startup and does not override variables already set in the environment. For the frontend, put values in `frontend/.env.local`. The setup scripts create both files when they are missing.
 
-## Build the desktop app
+Python dependencies are declared in `backend/pyproject.toml` and installed from `backend/requirements.txt` and `backend/requirements-dev.txt`. Those files carry the same pins, and `backend/tests/test_dependencies.py` fails if they drift. The pins are lower bounds so yt-dlp can update when YouTube changes. Frontend packages install from `frontend/package-lock.json` with `npm ci`.
 
-The files in `dist/` are the installers to download. Rebuild only when you are changing the app. A Mac produces `dist/CompCreator-mac.dmg` only. Windows produces `dist/CompCreator-windows.exe` only. Each of those is one file. The `Desktop packages` workflow builds both and commits them back into `dist/` when you run it by hand, push a `v*` tag, or change the app or packaging.
+## Local development
+
+The API is at http://localhost:8000 and the UI at http://localhost:3000.
+
+`ffmpeg` and `ffprobe` must be on `PATH` (`brew install ffmpeg` on macOS, `winget install Gyan.FFmpeg` on Windows). You also need Python 3.12 or newer and Node.js 20 or newer. yt-dlp comes from the Python environment, not from a separate binary. Deno 2.3 or newer is optional and is only required when YouTube cookies are configured.
+
+### One command
+
+From the repository root:
 
 ```bash
-python packaging/build.py
+# macOS or Linux
+./setup.sh          # create the virtualenv, install dependencies, write env files
+./setup.sh dev      # set up, then start the API and the UI
+./setup.sh lint     # Ruff, mypy, ESLint, and tsc
+./setup.sh test     # Python unit tests
+
+# Windows
+setup.bat
+setup.bat dev
+setup.bat lint
+setup.bat test
 ```
 
-Needs Node.js, npm, and Python 3.12. The script installs the desktop Python packages into `build/venv`, exports the UI, downloads ffmpeg, and writes that one file under `dist/`.
+`make setup`, `make dev`, `make lint`, and `make test` run the same commands.
 
-## Local run
-
-The backend is reachable at http://localhost:8000 and the frontend at http://localhost:3000 in both options.
-
-### Option A: Python venv
-
-A virtualenv already exists at `backend/.venv`. For non-Docker runs, `ffmpeg` must be on your `PATH` (for example `brew install ffmpeg`). Downloads use the `yt-dlp` package inside that virtualenv, not a separately installed binary.
+### Backend with a virtualenv
 
 ```bash
 cd backend
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt   # if dependencies are not installed yet
+pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -107,28 +219,37 @@ Optional overrides:
 CORS_ORIGINS=http://localhost:3000 JOBS_DIR=./data/jobs uvicorn app.main:app --reload --port 8000
 ```
 
-### Option B: Docker Compose (backend only)
+### Backend with Docker Compose
 
-The image is based on `python:3.12-slim`, installs ffmpeg via apt and yt-dlp via pip, and listens on port 8080. Compose maps host port 8000 to container port 8080.
+The image listens on port 8080. Compose publishes that as host port 8000. Job files live inside the container and disappear when the container is removed.
 
 ```bash
 docker compose up --build backend
 ```
 
-Jobs are written inside the container and are lost when the container is removed.
-
-Then run the frontend on the host as described below.
+Run the frontend on the host.
 
 ### Frontend
 
 ```bash
 cd frontend
 npm install
-echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local   # optional; this is the default
+printf '%s\n' 'NEXT_PUBLIC_API_URL=http://localhost:8000' > .env.local
 npm run dev
 ```
 
 Open http://localhost:3000.
+
+### Tests
+
+From `backend/`, with the virtualenv active and `backend` on `PYTHONPATH`:
+
+```bash
+cd backend
+PYTHONPATH=. python -m unittest discover -s tests
+```
+
+The suite covers timestamp parsing, channel URL normalization, channel listing, cookie selection, the stream-copy plan, delivery paths, cancellation, and the usage log. It does not download from YouTube or run ffmpeg.
 
 ### Smoke test
 
@@ -144,14 +265,56 @@ curl -X POST http://localhost:8000/api/compilations \
   -d '{"clips": [{"video_id": "XXXXXXXXXXX", "title": "Intro", "start": "0:10", "end": "0:40", "order": 0}]}'
 
 curl http://localhost:8000/api/compilations/<job_id>
-curl -o compilation.mp4 http://localhost:8000/api/compilations/<job_id>/download
+
+curl -X POST http://localhost:8000/api/compilations/<job_id>/download \
+  -H "Content-Type: application/json" \
+  -d '{"directory": "/Users/you/Downloads"}'
 ```
+
+## Desktop app
+
+Installers, when present in the repository:
+
+- macOS: [dist/CompCreator-mac.dmg](dist/CompCreator-mac.dmg)
+- Windows: [dist/CompCreator-windows.exe](dist/CompCreator-windows.exe)
+
+The window is the app. It starts a local API, serves the exported UI from that process, and saves finished videos to Downloads or to the folder you type. Working clips are deleted on save.
+
+### macOS
+
+1. Open `CompCreator-mac.dmg`.
+2. Drag `CompCreator` onto Applications.
+3. The first launch of an unsigned build: Control-click the app, choose Open, then Open again.
+4. If the window does not open, read `desktop.log` in `~/Library/Application Support/CompCreator`.
+
+### Windows
+
+1. Double-click `CompCreator-windows.exe`. That file is the whole app.
+2. If SmartScreen appears, choose More info, then Run anyway.
+3. Windows 11 includes the WebView2 runtime the window needs. On Windows 10, install [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) if the window does not open.
+4. The log is `desktop.log` in `%APPDATA%\CompCreator`.
+
+### Rebuild
+
+A Mac produces `dist/CompCreator-mac.dmg` only. Windows produces `dist/CompCreator-windows.exe` only. Each machine needs Node.js, npm, and Python 3.12. The script creates `build/venv`, installs `packaging/requirements-desktop.txt` (the backend requirements plus pywebview and PyInstaller), exports the UI, downloads ffmpeg, and writes the installer.
+
+```bash
+python packaging/build.py
+```
+
+The `Desktop packages` GitHub Actions workflow builds both installers and commits them back to `dist/` on a manual run, a `v*` tag, or a push to `main` that changes `backend/`, `frontend/`, `packaging/`, or `.gitattributes`.
 
 ## Deploy
 
-### Backend on Cloud Run
+### Vercel
 
-Deploy from the `backend/` directory using its Dockerfile:
+`vercel.json` runs two services from one project. The frontend root is `frontend/` (Next.js). The backend root is `backend/` (FastAPI, entrypoint `app.main:app`). Rewrites send `/health` and `/api/*` to the backend and everything else to the frontend.
+
+Leave `NEXT_PUBLIC_API_URL` unset so the browser calls `/api` on the same host. Set `YTDLP_COOKIES` or `YTDLP_COOKIES_FILE` in the project environment when YouTube requires a signed-in session. Do not commit cookie files. Job files on Vercel use `/tmp` and do not survive a new instance. The usage log sits next to `JOBS_DIR` (`usage.json`) and has the same lifetime.
+
+### Cloud Run (optional)
+
+The backend image can also be deployed on its own. Export work continues after the HTTP response, so CPU must stay allocated or the job freezes when the request ends.
 
 ```bash
 cd backend
@@ -166,25 +329,16 @@ gcloud run deploy compcreator-api \
   --set-env-vars "CORS_ORIGINS=https://your-app.vercel.app"
 ```
 
-Notes:
+`--allow-unauthenticated` matches the app: there is no auth. Several origins need a custom gcloud delimiter because `--set-env-vars` splits on commas: `--set-env-vars "^;^CORS_ORIGINS=https://a.example,https://b.example"`. `--max-instances 1` keeps status polls and the save request on the instance that holds the job. In-memory jobs and local MP4s do not survive a restart, and they are not shared across instances. A later GCS signed-URL path is sketched in `backend/app/stubs/gcs_download.py` and is not wired up.
 
-- `--no-cpu-throttling` (CPU always allocated) is required. Export runs in a background task after the HTTP response is sent, and Cloud Run freezes CPU once a request ends unless CPU is always allocated. Without this flag, compilations stall and never finish.
-- `--allow-unauthenticated` is for personal use only; there is no auth in the app.
-- To allow several origins (for example production plus a preview URL), pass a comma-separated list. Because gcloud also splits `--set-env-vars` on commas, use a custom delimiter: `--set-env-vars "^;^CORS_ORIGINS=https://a.vercel.app,https://b.vercel.app"`.
-- Consider `--max-instances 1` so status polls and downloads hit the same instance that ran the job.
-- Job state is held in memory and finished mp4s are stored on the instance's local disk. Neither survives an instance restart, scale-down, or redeploy, and they are not shared across instances. Serving downloads from Google Cloud Storage via signed URLs is stubbed in `backend/app/stubs/gcs_download.py` and not wired up.
+If the frontend is hosted separately, set `NEXT_PUBLIC_API_URL` to the Cloud Run URL and redeploy the frontend. That variable is inlined at build time. The frontend origin must be listed in `CORS_ORIGINS`.
 
-### Frontend on Vercel
+## Not wired up
 
-- Import the repo and set the project Root Directory to `frontend/`.
-- Framework preset: Next.js. Do not set a custom `output` mode in `next.config.ts`.
-- Set `NEXT_PUBLIC_API_URL` to the Cloud Run service URL (for example `https://compcreator-api-xxxxx-uc.a.run.app`). Redeploy after changing it, since it is inlined at build time.
-- Make sure the Vercel origin is listed in the backend's `CORS_ORIGINS`.
+These modules are comments and unused functions. Nothing imports them.
 
-## Stubs not wired up
+- `backend/app/stubs/gcs_download.py` — upload a finished MP4 and return a signed URL.
+- `backend/app/stubs/youtube_upload.py` — upload a finished compilation with the YouTube Data API.
+- `backend/app/stubs/autopilot.py` — scheduled channel scans that suggest compilation ideas.
 
-These modules exist as placeholders and are not called by the app:
-
-- `backend/app/stubs/gcs_download.py`: upload finished mp4s to GCS and return signed URLs.
-- `backend/app/stubs/youtube_upload.py`: upload a finished compilation via the YouTube Data API (OAuth plus resumable upload).
-- `backend/app/stubs/autopilot.py`: scheduled scans of a channel watchlist to suggest compilation ideas.
+`max_video_height` in `backend/app/youtube/formats.py` is also unused by the current routes.

@@ -2,8 +2,6 @@ import re
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.config import MAX_CLIPS
-
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
@@ -24,6 +22,8 @@ class VideoItem(BaseModel):
 
 class ChannelResponse(BaseModel):
     videos: list[VideoItem]
+    next_offset: int = 0
+    has_more: bool = False
 
 
 class Clip(BaseModel):
@@ -52,8 +52,12 @@ class Clip(BaseModel):
 
 
 class CompilationRequest(BaseModel):
-    clips: list[Clip] = Field(min_length=1, max_length=MAX_CLIPS)
+    clips: list[Clip] = Field(min_length=1)
     output_4k: bool = False
+
+
+class DownloadRequest(BaseModel):
+    directory: str | None = None
 
 
 class JobStatus(BaseModel):
@@ -62,3 +66,4 @@ class JobStatus(BaseModel):
     progress: str
     error: str | None = None
     download_url: str | None = None
+    saved_path: str | None = None

@@ -1,0 +1,67 @@
+"use client";
+
+import type { Job, JobStatus } from "@/lib/api/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+type Props = {
+  job: Job;
+  saving: boolean;
+  folder: string;
+  onFolderChange: (value: string) => void;
+  onDownload: (directory: string) => void;
+};
+
+/** Progress for the current export and the folder it will be saved into. */
+export default function JobStatusCard({
+  job,
+  saving,
+  folder,
+  onFolderChange,
+  onDownload,
+}: Props) {
+  return (
+    <div className={cn("flex flex-col gap-1 rounded-lg px-3 py-2 text-sm", statusTone(job.status))}>
+      <p>
+        Status: <span className="font-medium capitalize">{job.status}</span>
+        {job.progress ? ` — ${job.progress}` : null}
+      </p>
+      {job.status === "cancelled" && <p>Export cancelled. Partial downloads were deleted.</p>}
+      {job.status === "failed" && (
+        <p className="text-destructive">{job.error || "Compilation failed."}</p>
+      )}
+      {job.status === "ready" && (
+        <div className="flex flex-col gap-2 pt-1">
+          <label className="flex flex-col gap-1 text-sm">
+            Save folder
+            <Input
+              value={folder}
+              disabled={saving}
+              aria-label="Save folder"
+              placeholder="Downloads"
+              onChange={(event) => onFolderChange(event.target.value)}
+            />
+          </label>
+          <p className="text-muted-foreground">
+            The video is saved here, then the working clips are deleted. Leave this blank to use
+            your Downloads folder.
+          </p>
+          <Button type="button" variant="outline" disabled={saving} onClick={() => onDownload(folder)}>
+            {saving ? "Saving…" : "Download MP4"}
+          </Button>
+        </div>
+      )}
+      {job.status === "saved" && job.saved_path && (
+        <p>Saved to {job.saved_path}. Working files were deleted.</p>
+      )}
+    </div>
+  );
+}
+
+function statusTone(status: JobStatus): string {
+  if (status === "ready" || status === "saved") return "bg-emerald-500/15 text-emerald-200";
+  if (status === "failed") return "bg-red-500/15 text-red-200";
+  if (status === "cancelled") return "bg-muted text-muted-foreground";
+  return "bg-primary/10 text-foreground";
+}
