@@ -7,7 +7,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.envfile import load_env_file
-from app.errors import ConfigurationError, ensure_directory, terminal_message
+from app.errors import (
+    ConfigurationError,
+    ensure_directory,
+    stop_for_local_error,
+    terminal_message,
+)
 
 
 class TerminalMessageTests(unittest.TestCase):
@@ -56,6 +61,70 @@ class DirectoryTests(unittest.TestCase):
             ):
                 ensure_directory(target, purpose="jobs folder")
         self.assertIn("not a folder", str(caught.exception))
+
+
+class MoreTerminalMessageTests(unittest.TestCase):
+    def test_empty_configuration_error_has_a_sentence(self) -> None:
+        self.assertEqual(
+            terminal_message(ConfigurationError("  ")), "A setting is missing or invalid."
+        )
+
+    def test_permission_without_a_path(self) -> None:
+        self.assertEqual(terminal_message(PermissionError()), "Permission denied.")
+
+    def test_empty_missing_file_has_a_sentence(self) -> None:
+        self.assertEqual(terminal_message(FileNotFoundError()), "A required file is missing.")
+
+    def test_errno_oserror_names_the_path(self) -> None:
+        exc = OSError(28, "No space left on device", "/tmp/out.mp4")
+        self.assertEqual(
+            terminal_message(exc), "Could not access /tmp/out.mp4: No space left on device."
+        )
+
+    def test_errno_oserror_without_a_path(self) -> None:
+        exc = OSError(5, "Input/output error")
+        self.assertEqual(
+            terminal_message(exc), "Could not access a local file: Input/output error."
+        )
+
+    def test_bare_oserror_has_a_generic_reason(self) -> None:
+        self.assertEqual(
+            terminal_message(OSError()),
+            "Could not access a local file: the operating system rejected the request.",
+        )
+
+    def test_bytes_filename_is_decoded(self) -> None:
+        exc = PermissionError(13, "Permission denied", b"/tmp/caf\xc3\xa9")
+        self.assertEqual(terminal_message(exc), "Permission denied for /tmp/caf\u00e9.")
+
+    def test_other_exceptions_keep_their_text(self) -> None:
+        self.assertEqual(terminal_message(ValueError(" bad value ")), "bad value")
+        self.assertEqual(terminal_message(ValueError()), "CompCreator could not continue.")
+
+
+class MoreDirectoryTests(unittest.TestCase):
+    def test_other_os_errors_carry_the_reason(self) -> None:
+        failed = OSError(30, "Read-only file system")
+        with (
+            patch.object(Path, "mkdir", side_effect=failed),
+            self.assertRaises(ConfigurationError) as caught,
+        ):
+            ensure_directory(Path("jobs"), purpose="jobs folder")
+        self.assertIn("Could not create the jobs folder", str(caught.exception))
+        self.assertIn("Read-only file system", str(caught.exception))
+
+
+class StopForLocalErrorTests(unittest.TestCase):
+    def test_prints_one_line_and_exits(self) -> None:
+        stderr = io.StringIO()
+        with (
+            patch("app.errors.os._exit", side_effect=SystemExit(1)) as exit_now,
+            redirect_stderr(stderr),
+            self.assertRaises(SystemExit),
+        ):
+            stop_for_local_error(ConfigurationError("Set COMPCREATOR_PASSWORD."))
+        exit_now.assert_called_once_with(1)
+        self.assertEqual(stderr.getvalue(), "CompCreator: Set COMPCREATOR_PASSWORD.\n")
 
 
 class EnvFileFailureTests(unittest.TestCase):

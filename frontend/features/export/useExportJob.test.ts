@@ -2,7 +2,12 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TimelineClip } from "@/features/timeline/types";
-import { cancelCompilation, createCompilation, getCompilation } from "@/lib/api/compilations";
+import {
+  cancelCompilation,
+  createCompilation,
+  getCompilation,
+  saveCompilation,
+} from "@/lib/api/compilations";
 import type { Job } from "@/lib/api/types";
 import { useExportJob } from "./useExportJob";
 
@@ -160,5 +165,100 @@ describe("useExportJob polling", () => {
     await startExport(hook);
     expect(setValidationError).toHaveBeenLastCalledWith(expect.any(String));
     expect(createCompilation).not.toHaveBeenCalled();
+  });
+});
+
+describe("useExportJob requests", () => {
+  afterEach(() => {
+    vi.mocked(createCompilation).mockReset();
+    vi.mocked(cancelCompilation).mockReset();
+    vi.mocked(saveCompilation).mockReset();
+    vi.mocked(getCompilation).mockReset();
+  });
+
+  it("sends trimmed clips in timeline order", async () => {
+    vi.mocked(createCompilation).mockResolvedValue(job({ status: "ready" }));
+    const second = { ...CLIP, video_id: "abcdefghijk", start: " 00:02 ", end: "00:09 " };
+    const { hook, onExported } = setup([CLIP, second]);
+
+    await startExport(hook);
+
+    const [clips, output4k] = vi.mocked(createCompilation).mock.calls[0] ?? [];
+    expect(output4k).toBe(false);
+    expect(clips?.map((c) => [c.video_id, c.start, c.end, c.order])).toEqual([
+      ["dQw4w9WgXcQ", "00:01", "00:05", 0],
+      ["abcdefghijk", "00:02", "00:09", 1],
+    ]);
+    expect(onExported).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.submitting).toBe(false);
+  });
+
+  it("shows a create failure and clears it on request", async () => {
+    vi.mocked(createCompilation).mockRejectedValue(new Error("Another export is running."));
+    const { hook, onExported } = setup();
+
+    await startExport(hook);
+
+    expect(hook.result.current.requestError).toBe("Another export is running.");
+    expect(hook.result.current.job).toBeNull();
+    expect(onExported).not.toHaveBeenCalled();
+
+    act(() => hook.result.current.clearRequestError());
+    expect(hook.result.current.requestError).toBeNull();
+  });
+
+  it("does nothing on cancel or save without a job", async () => {
+    const { hook } = setup();
+    await act(async () => {
+      await hook.result.current.cancelExport();
+      await hook.result.current.downloadExport("/tmp");
+    });
+    expect(cancelCompilation).not.toHaveBeenCalled();
+    expect(saveCompilation).not.toHaveBeenCalled();
+  });
+
+  it("shows a cancel failure", async () => {
+    vi.mocked(createCompilation).mockResolvedValue(job({ status: "ready" }));
+    vi.mocked(cancelCompilation).mockRejectedValue(new Error("Job not found"));
+    const { hook } = setup();
+    await startExport(hook);
+
+    await act(async () => {
+      await hook.result.current.cancelExport();
+    });
+
+    expect(hook.result.current.requestError).toBe("Job not found");
+  });
+
+  it("saves a finished export into the chosen folder", async () => {
+    vi.mocked(createCompilation).mockResolvedValue(job({ status: "ready" }));
+    vi.mocked(saveCompilation).mockResolvedValue(
+      job({ status: "saved", saved_path: "/Users/me/Movies/out.mp4" }),
+    );
+    const { hook } = setup();
+    await startExport(hook);
+
+    await act(async () => {
+      await hook.result.current.downloadExport("/Users/me/Movies");
+    });
+
+    expect(saveCompilation).toHaveBeenCalledWith("job-1", "/Users/me/Movies");
+    expect(hook.result.current.job?.status).toBe("saved");
+    expect(hook.result.current.savingDownload).toBe(false);
+  });
+
+  it("shows a save failure and allows another try", async () => {
+    vi.mocked(createCompilation).mockResolvedValue(job({ status: "ready" }));
+    vi.mocked(saveCompilation).mockRejectedValue(new Error("Permission denied for /x."));
+    const { hook } = setup();
+    await startExport(hook);
+
+    await act(async () => {
+      await hook.result.current.downloadExport("/x");
+    });
+
+    expect(hook.result.current.requestError).toBe("Permission denied for /x.");
+    expect(hook.result.current.savingDownload).toBe(false);
+    expect(hook.result.current.job?.status).toBe("ready");
   });
 });

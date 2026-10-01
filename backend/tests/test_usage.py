@@ -51,6 +51,52 @@ class UsageStoreTests(unittest.TestCase):
             self.assertEqual(videos[0]["title"], "abcdefghijk")
             self.assertEqual(videos[0]["last_used"], None)
 
+    def test_malformed_entries_are_dropped_on_load(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "usage.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "videos": {
+                            "abcdefghijk": {"video_id": "abcdefghijk", "title": "Kept", "count": 2},
+                            "nocount0000": {"video_id": "nocount0000", "title": "No count"},
+                            "textcount00": {"title": "Text", "count": "3"},
+                            "boolcount00": {"title": "Bool", "count": True},
+                            "badfields00": {"count": 1, "title": 5, "view_count": "many"},
+                            "notadict000": 7,
+                        },
+                        "compilations": [
+                            {
+                                "name": "a.mp4",
+                                "made": "2026-01-01T00:00:00+00:00",
+                                "clips": 2,
+                                "duration_seconds": 60,
+                            },
+                            {"name": "b.mp4", "made": "2026-01-01T00:00:00+00:00"},
+                            {"name": "c.mp4", "made": "now", "clips": "2", "duration_seconds": 1},
+                            "not a dict",
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            store = UsageStore(path)
+
+            self.assertEqual(
+                store.counts_for(["abcdefghijk", "nocount0000", "textcount00", "boolcount00"]),
+                {"abcdefghijk": 2, "nocount0000": 0, "textcount00": 0, "boolcount00": 0},
+            )
+            self.assertEqual(store.count("badfields00"), 1)
+            videos = {video["video_id"]: video for video in store.logs()["videos"]}
+            self.assertEqual(set(videos), {"abcdefghijk", "badfields00"})
+            self.assertEqual(videos["badfields00"]["title"], "badfields00")
+            self.assertIsNone(videos["badfields00"]["view_count"])
+            names = [entry["name"] for entry in store.logs()["compilations"]]
+            self.assertEqual(names, ["a.mp4"])
+
+            store.record([{"video_id": "nocount0000", "title": "No count"}])
+            self.assertEqual(store.count("nocount0000"), 1)
+
     def test_failed_save_keeps_the_previous_log(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "usage.json"

@@ -23,6 +23,7 @@ from app.desktop.server import (
     prepare_environment,
 )
 from app.errors import ConfigurationError, terminal_message
+from app.jobs.runner import runner
 
 log = logging.getLogger("compcreator.desktop")
 
@@ -86,5 +87,8 @@ def _run() -> None:
 
     webview.create_window("CompCreator", url, width=1280, height=840, min_size=(900, 640))
     webview.start()
+    # Export children run in their own process groups and would outlive the
+    # window, so stop any running export before the server shuts down.
+    runner.cancel_all()
     server.should_exit = True
     thread.join(timeout=5)
