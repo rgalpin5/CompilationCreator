@@ -1,4 +1,4 @@
-import { readStored, writeStored } from "../storage";
+import { readStored, removeStored, tabStorage, writeStored } from "../storage";
 
 const PASSWORD_KEY = "compcreator-password";
 
@@ -18,14 +18,20 @@ export class TooManyAttemptsError extends Error {
   }
 }
 
-/** The password remembered in this browser for a hosted API, if any. */
+/** The password remembered in this tab for a hosted API, if any. */
 export function storedPassword(): string | null {
-  return readStored(PASSWORD_KEY);
+  return readStored(PASSWORD_KEY, tabStorage());
 }
 
-/** Remember ``password`` in this browser so later requests send it. */
+/**
+ * Remember ``password`` in this tab so later requests send it.
+ *
+ * Session storage keeps the password only until the tab closes. Earlier
+ * builds kept it in local storage, so that copy is removed here.
+ */
 export function rememberPassword(password: string): void {
-  writeStored(PASSWORD_KEY, password);
+  writeStored(PASSWORD_KEY, password, tabStorage());
+  removeStored(PASSWORD_KEY);
 }
 
 /** The header a hosted API expects. Empty when no password is known. */

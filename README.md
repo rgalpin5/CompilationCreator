@@ -165,7 +165,7 @@ Backend (`backend/app/config.py` and the yt-dlp helpers):
 | `YTDLP_COOKIES` | unset | Cookie file contents, or the same contents in base64. A temp file is written with mode `0600` |
 | `YTDLP_COOKIES_BROWSER` | unset | Browser to read cookies from. `none` skips browser cookies. The desktop app fills this in |
 | `YTDLP_DENO` | discovered | Full path to Deno when cookies are used |
-| `COMPCREATOR_PASSWORD` | unset | Shared password for the API. Required on a hosted server (`VERCEL` or `K_SERVICE` set), which refuses to start without it or with one shorter than 12 characters. Every `/api` request must send `Authorization: Bearer <password>`; `/health` stays open. The UI asks for it once and remembers it in that browser. A finished video's `file_url` carries a token that unlocks only that job's file. The token is signed with a random key made at startup rather than with the password, so a leaked link cannot help anyone guess the password, and links stop working when the server restarts. After 5 wrong passwords or tokens in 15 minutes, a client (by IP, from the last `X-Forwarded-For` entry when hosted) gets `429` with `Retry-After` until the oldest failure is 15 minutes old. Requests that send no password do not count. Leave it unset for local use and the desktop app. Without a password, a local server answers only requests addressed to `localhost`, `127.0.0.1` or `[::1]`, which blocks DNS-rebinding pages; set a password to reach it from another address |
+| `COMPCREATOR_PASSWORD` | unset | Shared password for the API. Required on a hosted server (`VERCEL` or `K_SERVICE` set), which refuses to start without it or with one shorter than 12 characters. Every `/api` request must send `Authorization: Bearer <password>`; `/health` stays open. The UI asks for it once per tab and keeps it in session storage until the tab closes. A finished video's `file_url` carries a token that unlocks only that job's file. The token is signed with a random key made at startup rather than with the password, so a leaked link cannot help anyone guess the password, and links stop working when the server restarts. After 5 wrong passwords or tokens in 15 minutes, a client (by IP, from the last `X-Forwarded-For` entry when hosted) gets `429` with `Retry-After` until the oldest failure is 15 minutes old. Requests that send no password do not count. Leave it unset for local use and the desktop app. Without a password, a local server answers only requests addressed to `localhost`, `127.0.0.1` or `[::1]`, which blocks DNS-rebinding pages; set a password to reach it from another address |
 | `COMPCREATOR_DESKTOP` | unset | Set by the desktop launcher |
 
 Frontend:
@@ -341,7 +341,7 @@ Cloud Run sets `K_SERVICE`, which makes the API a hosted server: it refuses to s
 
 ### UI on Vercel
 
-`vercel.json` deploys only the Next.js frontend (`frontend/`). In the Vercel project settings, set `NEXT_PUBLIC_API_URL` to the Cloud Run URL and redeploy; the value is inlined at build time. List the Vercel origin in the API's `CORS_ORIGINS`. The UI asks for the API password once and remembers it in that browser.
+`vercel.json` deploys only the Next.js frontend (`frontend/`). In the Vercel project settings, set `NEXT_PUBLIC_API_URL` to the Cloud Run URL and redeploy; the value is inlined at build time. List the Vercel origin in the API's `CORS_ORIGINS`. The UI asks for the API password once per tab and keeps it until the tab closes.
 
 ## Not wired up
 

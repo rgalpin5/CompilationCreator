@@ -91,7 +91,7 @@ export default function PasswordGate({ children }: { children: ReactNode }) {
             </label>
             {problem && <p className="text-sm text-destructive">{problem}</p>}
             <p className="text-sm text-muted-foreground">
-              This browser remembers the password once it works.
+              This tab remembers the password until you close it.
             </p>
             <Button type="submit" disabled={submitting || !password.trim()}>
               {submitting ? "Checking…" : "Continue"}

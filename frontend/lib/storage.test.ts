@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readStored, writeStored } from "./storage";
+import { readStored, removeStored, writeStored } from "./storage";
 
 function memoryStorage(): Pick<Storage, "getItem" | "setItem"> {
   const values = new Map<string, string>();
@@ -35,5 +35,23 @@ describe("readStored and writeStored", () => {
   it("treats missing storage as empty", () => {
     expect(readStored("folder", null)).toBeNull();
     expect(writeStored("folder", "/tmp", null)).toBe(false);
+  });
+});
+
+describe("removeStored", () => {
+  it("forgets a stored value", () => {
+    const values = new Map([["folder", "/tmp"]]);
+    removeStored("folder", { removeItem: (key) => values.delete(key) });
+    expect(values.has("folder")).toBe(false);
+  });
+
+  it("ignores storage that throws or is missing", () => {
+    const throwing = {
+      removeItem: () => {
+        throw new DOMException("blocked", "SecurityError");
+      },
+    };
+    expect(() => removeStored("folder", throwing)).not.toThrow();
+    expect(() => removeStored("folder", null)).not.toThrow();
   });
 });
