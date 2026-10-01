@@ -3,6 +3,8 @@
 import { useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { formatSeconds } from "@/lib/time";
 
+const END_EVENTS = ["pointerup", "pointercancel", "lostpointercapture"] as const;
+
 type Props = {
   duration: number;
   start: number;
@@ -42,15 +44,17 @@ export default function TrimBar({
     target.setPointerCapture(event.pointerId);
     apply(secondsFromClientX(event.clientX));
     const onMove = (ev: PointerEvent) => apply(secondsFromClientX(ev.clientX));
-    const onUp = (ev: PointerEvent) => {
+    // A cancelled or lost capture ends the drag too. Without this, the move
+    // listener would outlive the drag and a later hover would move the cut.
+    const onEnd = (ev: PointerEvent) => {
       if (target.hasPointerCapture(ev.pointerId)) {
         target.releasePointerCapture(ev.pointerId);
       }
       target.removeEventListener("pointermove", onMove);
-      target.removeEventListener("pointerup", onUp);
+      for (const type of END_EVENTS) target.removeEventListener(type, onEnd);
     };
     target.addEventListener("pointermove", onMove);
-    target.addEventListener("pointerup", onUp);
+    for (const type of END_EVENTS) target.addEventListener(type, onEnd);
   }
 
   function nudge(which: "start" | "end", key: string, shift: boolean) {
