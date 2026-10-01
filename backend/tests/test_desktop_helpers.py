@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import unittest
 import urllib.error
 from pathlib import Path
@@ -175,17 +176,18 @@ class LocalServerTests(unittest.TestCase):
         attempts = [urllib.error.URLError("refused"), ok]
         with (
             patch.object(server.urllib.request, "urlopen", side_effect=attempts) as urlopen,
-            patch.object(server.time, "sleep"),
+            patch.object(server, "time", SimpleNamespace(time=time.time, sleep=lambda _s: None)),
         ):
             server._wait_until_ready("http://127.0.0.1:1/api/health", timeout=5)
         self.assertEqual(urlopen.call_count, 2)
 
     def test_wait_gives_up_with_one_sentence(self) -> None:
         clock = iter([0.0, 0.0, 10.0])
+        # Replace only server's reference: logging also reads time.time().
+        fake_time = SimpleNamespace(time=lambda: next(clock), sleep=lambda _seconds: None)
         with (
             patch.object(server.urllib.request, "urlopen", side_effect=OSError("refused")),
-            patch.object(server.time, "time", side_effect=lambda: next(clock)),
-            patch.object(server.time, "sleep"),
+            patch.object(server, "time", fake_time),
             self.assertLogs("compcreator.desktop", level="ERROR"),
             self.assertRaises(ConfigurationError) as caught,
         ):
