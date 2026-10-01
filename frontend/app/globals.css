@@ -10,6 +10,9 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-display), var(--font-sans);
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --shadow-glow: 0 0 10px var(--primary);
   --color-keep: var(--keep);
   --color-cut: var(--cut);
   --color-sidebar-ring: var(--sidebar-ring);

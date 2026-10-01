@@ -80,7 +80,7 @@ export default function TrimBar({
           />
         </div>
         <div
-          className="pointer-events-none absolute top-0.5 h-7 w-0.5 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_8px_var(--primary)]"
+          className="pointer-events-none absolute top-0.5 h-7 w-0.5 -translate-x-1/2 rounded-full bg-primary shadow-glow"
           style={{ left: `${playPct}%` }}
         />
         <Handle
@@ -106,7 +106,7 @@ export default function TrimBar({
           }}
         />
       </div>
-      <div className="flex justify-between font-mono text-[11px] text-muted-foreground tabular-nums">
+      <div className="flex justify-between font-mono text-2xs text-muted-foreground tabular-nums">
         <span>Start {formatSeconds(start)}</span>
         <span className="text-keep">{formatSeconds(end - start)} kept</span>
         <span>End {formatSeconds(end)}</span>

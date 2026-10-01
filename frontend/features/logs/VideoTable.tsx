@@ -105,8 +105,10 @@ export default function VideoTable({ videos }: Props) {
               <td className="px-2 py-3 text-right">
                 <span
                   className={cn(
-                    "inline-flex rounded-md px-2 py-1 text-xs font-medium text-white",
-                    video.count > 0 && video.count === topCount ? "bg-emerald-600" : "bg-teal-700",
+                    "inline-flex rounded-md px-2 py-1 text-xs font-medium",
+                    video.count > 0 && video.count === topCount
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-secondary-foreground",
                   )}
                 >
                   Used {video.count}x

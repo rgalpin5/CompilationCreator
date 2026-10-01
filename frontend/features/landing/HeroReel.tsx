@@ -16,7 +16,7 @@ const WAVE = [4, 7, 5, 9, 6, 3, 8, 10, 6, 4, 7, 9, 5, 3, 6, 8, 4, 7, 10, 5, 6, 9
 export default function HeroReel() {
   return (
     <div className="relative overflow-hidden rounded-xl bg-card shadow-2xl shadow-black/40 ring-1 ring-border">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-3 border-b px-4 py-2.5 font-mono text-2xs text-muted-foreground">
         <span className="truncate">compilation.mp4</span>
         <span className="flex shrink-0 items-center gap-3 tabular-nums">
           <span>5 clips</span>
@@ -33,7 +33,7 @@ export default function HeroReel() {
               style={{ flexGrow: clip.grow, flexBasis: 0 }}
             >
               <div className="bg-hatch-cut" style={{ width: `${clip.intro}%` }} />
-              <div className="flex min-w-0 flex-1 flex-col justify-between bg-keep/85 px-1.5 py-1 text-[10px] font-medium text-background">
+              <div className="flex min-w-0 flex-1 flex-col justify-between bg-keep/85 px-1.5 py-1 text-2xs font-medium text-background">
                 <span className="truncate">{clip.label}</span>
                 <span className="h-1 w-6 rounded-full bg-background/30" />
               </div>
@@ -54,13 +54,13 @@ export default function HeroReel() {
         </Track>
 
         <div className="pointer-events-none absolute inset-y-2 left-14 right-4">
-          <div className="animate-playhead absolute inset-y-0 w-px bg-primary shadow-[0_0_12px_var(--primary)]">
+          <div className="animate-playhead absolute inset-y-0 w-px bg-primary shadow-glow">
             <span className="absolute -top-1 -left-[5px] size-[11px] rotate-45 rounded-[2px] bg-primary" />
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2.5 text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2.5 text-2xs text-muted-foreground">
         <Legend className="bg-keep">Kept</Legend>
         <Legend className="bg-hatch-cut">Intro / outro cut</Legend>
       </div>
@@ -71,7 +71,7 @@ export default function HeroReel() {
 function Track({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-8 shrink-0 font-mono text-[10px] text-muted-foreground">{label}</span>
+      <span className="w-8 shrink-0 font-mono text-2xs text-muted-foreground">{label}</span>
       <div className="flex min-w-0 flex-1 gap-1">{children}</div>
     </div>
   );

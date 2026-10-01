@@ -38,7 +38,7 @@ export default function VideoCard({ video, selected, onSelect }: Props) {
             </span>
           )}
           {video.duration_seconds != null && (
-            <span className="absolute right-1.5 bottom-1.5 rounded bg-black/75 px-1 font-mono text-[11px] text-white tabular-nums">
+            <span className="absolute right-1.5 bottom-1.5 rounded bg-black/75 px-1 font-mono text-2xs text-white tabular-nums">
               {formatSeconds(video.duration_seconds)}
             </span>
           )}

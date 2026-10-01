@@ -40,7 +40,7 @@ export default function Timeline({ clips, disabled, onRemove, onMove }: Props) {
             <li key={clip.video_id} className="group flex flex-col gap-2 rounded-lg bg-muted/60 p-2.5">
               <div className="flex items-start justify-between gap-2">
                 <span className="flex min-w-0 gap-2 text-sm leading-snug">
-                  <span className="mt-px flex h-5 min-w-5 shrink-0 items-center justify-center rounded bg-primary px-1 font-mono text-[11px] font-semibold text-primary-foreground tabular-nums">
+                  <span className="mt-px flex h-5 min-w-5 shrink-0 items-center justify-center rounded bg-primary px-1 font-mono text-2xs font-semibold text-primary-foreground tabular-nums">
                     {i + 1}
                   </span>
                   <span className="line-clamp-2">{clip.title}</span>
@@ -87,7 +87,7 @@ export default function Timeline({ clips, disabled, onRemove, onMove }: Props) {
                 />
               )}
               {hasCut && start != null && end != null && (
-                <p className="font-mono text-[11px] text-muted-foreground tabular-nums">
+                <p className="font-mono text-2xs text-muted-foreground tabular-nums">
                   {introCut > 0 ? `${formatSeconds(introCut)} intro cut` : "No intro cut"}
                   {" · "}
                   {outroCut != null && outroCut > 0

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "CompCreator design tokens. Source of truth is frontend/app/globals.css; this file mirrors it. Hex values are sRGB approximations of the oklch originals, for tools that cannot read oklch.",
+  "color": {
+    "surface": {
+      "background": { "$type": "color", "$value": "oklch(0.16 0.018 255)", "hex": "#080e15", "css": "--background" },
+      "card": { "$type": "color", "$value": "oklch(0.2 0.022 255)", "hex": "#0f1720", "css": "--card" },
+      "popover": { "$type": "color", "$value": "oklch(0.215 0.022 255)", "hex": "#131a24", "css": "--popover" },
+      "secondary": { "$type": "color", "$value": "oklch(0.255 0.022 255)", "hex": "#1c232d", "css": "--secondary" },
+      "muted": { "$type": "color", "$value": "oklch(0.25 0.022 255)", "hex": "#1b222c", "css": "--muted" },
+      "accent": { "$type": "color", "$value": "oklch(0.28 0.024 255)", "hex": "#212a35", "css": "--accent" },
+      "scrim": { "$type": "color", "$value": "oklch(0 0 0 / 75%)", "hex": "#000000bf", "css": "--scrim" }
+    },
+    "text": {
+      "foreground": { "$type": "color", "$value": "oklch(0.96 0.008 240)", "hex": "#edf3f7", "css": "--foreground" },
+      "muted": { "$type": "color", "$value": "oklch(0.74 0.02 245)", "hex": "#a1acb7", "css": "--muted-foreground" },
+      "on-primary": { "$type": "color", "$value": "oklch(0.2 0.03 220)", "hex": "#04191f", "css": "--primary-foreground" }
+    },
+    "action": {
+      "primary": { "$type": "color", "$value": "oklch(0.86 0.13 168)", "hex": "#6eecc1", "css": "--primary", "role": "Action, selection, focus ring, playhead" },
+      "destructive": { "$type": "color", "$value": "oklch(0.7 0.17 15)", "hex": "#f56b7c", "css": "--destructive" }
+    },
+    "footage": {
+      "keep": { "$type": "color", "$value": "oklch(0.76 0.12 235)", "hex": "#5abdf2", "css": "--keep", "role": "Footage that stays in the compilation" },
+      "cut": { "$type": "color", "$value": "oklch(0.7 0.17 15)", "hex": "#f56b7c", "css": "--cut", "role": "Footage trimmed away; pair with bg-hatch-cut so it is not colour-only" }
+    },
+    "line": {
+      "border": { "$type": "color", "$value": "oklch(0.9 0.03 240 / 11%)", "css": "--border" },
+      "input": { "$type": "color", "$value": "oklch(0.9 0.03 240 / 15%)", "css": "--input" },
+      "grid": { "$type": "color", "$value": "oklch(0.9 0.03 240 / 5%)", "css": "bg-frame-grid" }
+    },
+    "chart": {
+      "1": { "$type": "color", "$value": "oklch(0.86 0.13 168)", "hex": "#6eecc1" },
+      "2": { "$type": "color", "$value": "oklch(0.76 0.12 235)", "hex": "#5abdf2" },
+      "3": { "$type": "color", "$value": "oklch(0.7 0.17 15)", "hex": "#f56b7c" },
+      "4": { "$type": "color", "$value": "oklch(0.82 0.12 95)", "hex": "#dcc363" },
+      "5": { "$type": "color", "$value": "oklch(0.72 0.13 300)", "hex": "#b191ea" }
+    }
+  },
+  "font": {
+    "family": {
+      "sans": { "$type": "fontFamily", "$value": ["Geist", "ui-sans-serif", "system-ui", "sans-serif"], "css": "--font-sans" },
+      "mono": { "$type": "fontFamily", "$value": ["Geist Mono", "ui-monospace", "monospace"], "css": "--font-mono" },
+      "heading": { "$type": "fontFamily", "$value": ["Bricolage Grotesque", "Geist", "sans-serif"], "css": "--font-heading" }
+    },
+    "size": {
+      "2xs": { "$type": "dimension", "$value": "0.6875rem", "px": 11, "use": "Timecodes, meta labels (mono)", "replaces": ["text-[11px]", "text-[10px]"] },
+      "xs": { "$type": "dimension", "$value": "0.75rem", "px": 12 },
+      "sm": { "$type": "dimension", "$value": "0.875rem", "px": 14, "use": "Default UI text" },
+      "base": { "$type": "dimension", "$value": "1rem", "px": 16 },
+      "lg": { "$type": "dimension", "$value": "1.125rem", "px": 18 },
+      "xl": { "$type": "dimension", "$value": "1.25rem", "px": 20 },
+      "3xl": { "$type": "dimension", "$value": "1.875rem", "px": 30, "use": "Section headings (heading font)" },
+      "4xl": { "$type": "dimension", "$value": "2.25rem", "px": 36 },
+      "5xl": { "$type": "dimension", "$value": "3rem", "px": 48 },
+      "6xl": { "$type": "dimension", "$value": "3.75rem", "px": 60, "use": "Landing hero only" }
+    },
+    "weight": { "medium": 500, "semibold": 600, "bold": 700 },
+    "lineHeight": { "display": 1.05 }
+  },
+  "space": {
+    "$description": "Tailwind 4px base unit. Observed usage clusters on 1, 2, 3, 4, 6.",
+    "0.5": "2px", "1": "4px", "1.5": "6px", "2": "8px", "2.5": "10px", "3": "12px", "4": "16px", "6": "24px", "8": "32px", "10": "40px", "16": "64px", "20": "80px"
+  },
+  "radius": {
+    "base": { "$type": "dimension", "$value": "0.5rem", "css": "--radius" },
+    "sm": { "$value": "calc(var(--radius) * 0.6)", "px": 4.8 },
+    "md": { "$value": "calc(var(--radius) * 0.8)", "px": 6.4 },
+    "lg": { "$value": "var(--radius)", "px": 8, "use": "Buttons, inputs, thumbnails" },
+    "xl": { "$value": "calc(var(--radius) * 1.4)", "px": 11.2, "use": "Cards, panels" },
+    "full": { "$value": "9999px", "use": "Pills, playhead, avatars" }
+  },
+  "shadow": {
+    "float": { "$value": "0 25px 50px -12px oklch(0 0 0 / 40%)", "use": "Hero reel only" },
+    "glow-primary": { "$value": "0 0 12px var(--primary)", "css": "--shadow-glow", "replaces": ["shadow-[0_0_8px_var(--primary)]", "shadow-[0_0_12px_var(--primary)]"] }
+  },
+  "motion": {
+    "duration": { "fast": "150ms", "playhead": "9s" },
+    "reducedMotion": "Playhead freezes at 38%; other transitions are colour-only."
+  },
+  "breakpoint": { "sm": "40rem", "md": "48rem", "lg": "64rem" }
+}

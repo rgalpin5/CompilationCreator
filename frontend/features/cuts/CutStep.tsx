@@ -126,7 +126,7 @@ export default function CutStep({
                           end={end ?? item.duration_seconds}
                         />
                       )}
-                      <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+                      <span className="font-mono text-2xs text-muted-foreground tabular-nums">
                         {start > 0 ? `${formatSeconds(start)} intro` : "No intro"}
                         {" · "}
                         {outro > 0 ? `${formatSeconds(outro)} outro` : "No outro"}

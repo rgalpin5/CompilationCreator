@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CompCreator Design Tokens</title>
+<style>
+  /* Mirrors frontend/app/globals.css. Fonts fall back to system faces when Geist/Bricolage are not installed. */
+  :root {
+    --background: oklch(0.16 0.018 255);
+    --foreground: oklch(0.96 0.008 240);
+    --card: oklch(0.2 0.022 255);
+    --popover: oklch(0.215 0.022 255);
+    --primary: oklch(0.86 0.13 168);
+    --primary-foreground: oklch(0.2 0.03 220);
+    --secondary: oklch(0.255 0.022 255);
+    --muted: oklch(0.25 0.022 255);
+    --muted-foreground: oklch(0.74 0.02 245);
+    --accent: oklch(0.28 0.024 255);
+    --destructive: oklch(0.7 0.17 15);
+    --border: oklch(0.9 0.03 240 / 11%);
+    --input: oklch(0.9 0.03 240 / 15%);
+    --keep: oklch(0.76 0.12 235);
+    --cut: oklch(0.7 0.17 15);
+    --chart-4: oklch(0.82 0.12 95);
+    --chart-5: oklch(0.72 0.13 300);
+    --radius: 0.5rem;
+    --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --font-heading: "Bricolage Grotesque", var(--font-sans);
+    --text-2xs: 0.6875rem;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--background); color: var(--foreground);
+    font: 14px/1.5 var(--font-sans); -webkit-font-smoothing: antialiased;
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, oklch(0.9 0.03 240 / 5%) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(0.9 0.03 240 / 5%) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at top, black 30%, transparent 75%);
+    position: absolute; inset: 0; pointer-events: none;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 0 16px 80px; }
+  header { position: relative; padding: 64px 16px 40px; max-width: 1040px; margin: 0 auto; }
+  h1, h2 { font-family: var(--font-heading); font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+  h1 { font-size: clamp(2.25rem, 6vw, 3.75rem); line-height: 1.05; text-wrap: balance; }
+  h2 { font-size: 1.875rem; margin: 56px 0 16px; }
+  .lede { color: var(--muted-foreground); font-size: 1rem; max-width: 56ch; margin-top: 12px; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .meta { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--muted-foreground); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.4); padding: 16px; }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .swatch { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); background: var(--card); cursor: pointer; text-align: left; color: inherit; font: inherit; padding: 0; }
+  .swatch:focus-visible, .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 50%, transparent); }
+  .swatch .chip { height: 64px; }
+  .swatch .info { padding: 8px 10px; }
+  .swatch .name { font-weight: 500; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { height: 32px; padding: 0 10px; border-radius: var(--radius); border: 1px solid transparent; font: 500 14px var(--font-sans); cursor: pointer; transition: background-color .15s, color .15s; }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn-primary:hover { background: color-mix(in oklch, var(--primary) 80%, transparent); }
+  .btn-secondary { background: var(--secondary); color: var(--foreground); }
+  .btn-outline { background: color-mix(in oklch, var(--input) 30%, transparent); border-color: var(--input); color: var(--foreground); }
+  .btn-ghost { background: transparent; color: var(--foreground); }
+  .btn-ghost:hover { background: color-mix(in oklch, var(--muted) 50%, transparent); }
+  .btn-destructive { background: color-mix(in oklch, var(--destructive) 20%, transparent); color: var(--destructive); }
+  .type-row { display: grid; grid-template-columns: 110px 1fr; gap: 16px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .type-row:last-child { border-bottom: 0; }
+  .timeline { position: relative; display: flex; height: 44px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+  .seg-keep { background: color-mix(in oklch, var(--keep) 85%, transparent); color: var(--background); font-size: 10px; font-weight: 500; padding: 4px 6px; }
+  .seg-cut {
+    background-color: color-mix(in oklch, var(--cut) 14%, transparent);
+    background-image: repeating-linear-gradient(135deg, color-mix(in oklch, var(--cut) 55%, transparent) 0 1.5px, transparent 1.5px 6px);
+  }
+  .playhead { position: absolute; inset-block: 0; width: 1px; background: var(--primary); box-shadow: 0 0 10px var(--primary); animation: sweep 9s linear infinite; }
+  .playhead::before { content: ""; position: absolute; top: -4px; left: -5px; width: 11px; height: 11px; transform: rotate(45deg); border-radius: 2px; background: var(--primary); }
+  @keyframes sweep { from { left: 0% } to { left: 100% } }
+  @media (prefers-reduced-motion: reduce) { .playhead { animation: none; left: 38%; } }
+  .scale { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+  .scale div { background: color-mix(in oklch, var(--primary) 35%, transparent); border: 1px solid color-mix(in oklch, var(--primary) 60%, transparent); }
+  .radii { display: flex; gap: 16px; flex-wrap: wrap; }
+  .radii div { width: 72px; height: 72px; background: var(--secondary); border: 1px solid var(--border); display: grid; place-items: center; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted-foreground); font-weight: 500; font-size: 12px; }
+  .pass { color: var(--primary); } .fail { color: var(--destructive); }
+  .badge { display: inline-flex; border-radius: calc(var(--radius) * 0.8); padding: 4px 8px; font-size: 12px; font-weight: 500; }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--popover); border: 1px solid var(--border); padding: 8px 12px; border-radius: var(--radius); opacity: 0; transition: opacity .15s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .two { grid-template-columns: 1fr; } .type-row { grid-template-columns: 1fr; gap: 2px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="grid-bg"></div>
+  <div style="position:relative">
+    <p class="meta">COMPCREATOR · DESIGN TOKENS · DARK ONLY</p>
+    <h1>Ink-navy workspace, footage up front.</h1>
+    <p class="lede">Mint means act. Sky means keep. Rose with hatching means cut. Every other color is a navy neutral, ordered by lightness. Click a swatch to copy its CSS variable.</p>
+  </div>
+</header>
+<main>
+  <h2>Meaning</h2>
+  <div class="card">
+    <div class="timeline" role="img" aria-label="Timeline: kept, cut, kept, cut, kept">
+      <div class="seg-keep" style="flex:3">intro kept</div>
+      <div class="seg-cut" style="flex:1"></div>
+      <div class="seg-keep" style="flex:5">clip 2</div>
+      <div class="seg-cut" style="flex:1.2"></div>
+      <div class="seg-keep" style="flex:2.5">clip 3</div>
+      <div class="playhead"></div>
+    </div>
+    <div class="row meta" style="margin-top:10px;justify-content:space-between"><span>00:00:00</span><span>00:04:12</span><span>00:09:48</span></div>
+  </div>
+  <div class="swatches" style="margin-top:12px" id="semantic"></div>
+
+  <h2>Surfaces</h2>
+  <div class="swatches" id="surfaces"></div>
+
+  <h2>Charts</h2>
+  <div class="swatches" id="charts"></div>
+
+  <h2>Type</h2>
+  <div class="card">
+    <div class="type-row"><span class="meta">heading 6xl</span><span style="font:700 3.75rem/1.05 var(--font-heading);letter-spacing:-0.02em">One file.</span></div>
+    <div class="type-row"><span class="meta">heading 3xl</span><span style="font:700 1.875rem/1.2 var(--font-heading);letter-spacing:-0.02em">Three steps, one file</span></div>
+    <div class="type-row"><span class="meta">sans base</span><span style="font-size:1rem">Paste a channel and pick the videos.</span></div>
+    <div class="type-row"><span class="meta">sans sm · default</span><span>Trim the intro and outro, then export.</span></div>
+    <div class="type-row"><span class="meta">sans xs muted</span><span style="font-size:12px;color:var(--muted-foreground)">12 clips · 1h 04m total</span></div>
+    <div class="type-row"><span class="meta">mono 2xs</span><span class="mono" style="font-size:var(--text-2xs);color:var(--muted-foreground)">00:01:23.40 → 00:08:51.12</span></div>
+  </div>
+
+  <h2>Components</h2>
+  <div class="card">
+    <div class="row">
+      <button class="btn btn-primary">Export MP4</button>
+      <button class="btn btn-secondary">Preview</button>
+      <button class="btn btn-outline">Load channel</button>
+      <button class="btn btn-ghost">Logs</button>
+      <button class="btn btn-destructive">Cancel export</button>
+    </div>
+    <div class="two" style="margin-top:20px">
+      <div>
+        <p class="meta" style="margin:0 0 8px">BADGE · before (fails AA)</p>
+        <span class="badge" style="background:#059669;color:#fff">Used 4x</span>
+        <span class="badge" style="background:#0f766e;color:#fff">Used 1x</span>
+      </div>
+      <div>
+        <p class="meta" style="margin:0 0 8px">BADGE · now</p>
+        <span class="badge" style="background:var(--primary);color:var(--primary-foreground)">Used 4x</span>
+        <span class="badge" style="background:var(--secondary);color:var(--foreground)">Used 1x</span>
+      </div>
+    </div>
+  </div>
+
+  <h2>Spacing · 4px unit</h2>
+  <div class="card scale" id="spacing"></div>
+
+  <h2>Radius</h2>
+  <div class="card radii">
+    <div style="border-radius:calc(var(--radius)*.6)" class="meta">sm</div>
+    <div style="border-radius:calc(var(--radius)*.8)" class="meta">md</div>
+    <div style="border-radius:var(--radius)" class="meta">lg</div>
+    <div style="border-radius:calc(var(--radius)*1.4)" class="meta">xl</div>
+    <div style="border-radius:9999px" class="meta">full</div>
+  </div>
+
+  <h2>Contrast</h2>
+  <div class="card" style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Pair</th><th>Sample</th><th>Ratio</th><th>AA</th></tr></thead>
+      <tbody id="contrast"></tbody>
+    </table>
+  </div>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+  const sw = (id, items) => {
+    document.getElementById(id).innerHTML = items.map(([name, v, hex, note]) => `
+      <button class="swatch" data-copy="var(${v})">
+        <div class="chip" style="background:var(${v})"></div>
+        <div class="info"><div class="name">${name}</div><div class="meta">${v}</div><div class="meta">${hex}${note ? " · " + note : ""}</div></div>
+      </button>`).join("");
+  };
+  sw("semantic", [
+    ["Primary", "--primary", "#6eecc1", "act / select"],
+    ["Keep", "--keep", "#5abdf2", "kept footage"],
+    ["Cut", "--cut", "#f56b7c", "+ hatching"],
+    ["Destructive", "--destructive", "#f56b7c", "= cut"],
+  ]);
+  sw("surfaces", [
+    ["Background", "--background", "#080e15", "L 0.16"],
+    ["Card", "--card", "#0f1720", "L 0.20"],
+    ["Popover", "--popover", "#131a24", "L 0.215"],
+    ["Muted", "--muted", "#1b222c", "L 0.25"],
+    ["Secondary", "--secondary", "#1c232d", "L 0.255"],
+    ["Accent", "--accent", "#212a35", "L 0.28"],
+    ["Foreground", "--foreground", "#edf3f7", "text"],
+    ["Muted fg", "--muted-foreground", "#a1acb7", "text"],
+  ]);
+  sw("charts", [
+    ["chart-1", "--primary", "#6eecc1"], ["chart-2", "--keep", "#5abdf2"], ["chart-3", "--cut", "#f56b7c"],
+    ["chart-4", "--chart-4", "#dcc363"], ["chart-5", "--chart-5", "#b191ea"],
+  ]);
+  document.getElementById("spacing").innerHTML = [1, 2, 3, 4, 6, 8, 10, 16, 20]
+    .map(n => `<div title="${n * 4}px" style="width:${n * 4}px;height:${n * 4}px"></div><span class="meta">${n}·${n * 4}px</span>`).join("");
+  document.getElementById("contrast").innerHTML = [
+    ["foreground / background", "--foreground", "--background", 17.3],
+    ["foreground / card", "--foreground", "--card", 16.1],
+    ["muted-fg / card", "--muted-foreground", "--card", 7.9],
+    ["muted-fg / muted", "--muted-foreground", "--muted", 7.0],
+    ["primary-fg / primary", "--primary-foreground", "--primary", 12.4],
+    ["destructive / card", "--destructive", "--card", 6.3],
+    ["keep / background", "--keep", "--background", 9.2],
+    ["white / emerald-600 (badge)", "#fff", "#059669", 3.77],
+  ].map(([n, f, b, r]) => {
+    const c = x => x.startsWith("--") ? `var(${x})` : x;
+    return `<tr><td>${n}</td><td><span class="badge" style="color:${c(f)};background:${c(b)}">Aa 12px</span></td><td class="mono">${r.toFixed(2)}</td><td class="${r >= 4.5 ? "pass" : "fail"}">${r >= 4.5 ? "pass" : "fail"}</td></tr>`;
+  }).join("");
+  const toast = document.getElementById("toast");
+  document.addEventListener("click", async e => {
+    const el = e.target.closest("[data-copy]");
+    if (!el) return;
+    try { await navigator.clipboard.writeText(el.dataset.copy); toast.textContent = "Copied " + el.dataset.copy; }
+    catch { toast.textContent = el.dataset.copy; }
+    toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 1400);
+  });
+</script>
+</body>
+</html>
