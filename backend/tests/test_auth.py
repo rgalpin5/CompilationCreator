@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import unittest
 import uuid
 from unittest.mock import patch
@@ -237,6 +238,21 @@ class PasswordTests(unittest.TestCase):
             self.assertEqual(Settings().trusted_proxy_hops, 3)
         with patch.dict("os.environ", {"COMPCREATOR_TRUSTED_PROXY_HOPS": ""}):
             self.assertEqual(Settings().trusted_proxy_hops, 1)
+
+
+class AccessLogTests(unittest.TestCase):
+    def test_download_tokens_are_hidden_in_access_log_lines(self) -> None:
+        auth.hide_tokens_in_access_log()
+        auth.hide_tokens_in_access_log()
+        access = logging.getLogger("uvicorn.access")
+        self.assertEqual(access.filters.count(auth._access_log_filter), 1)
+        path = "/api/compilations/abc/file?download=1&token=s3cret&x=2"
+        with self.assertLogs(access, level="INFO") as logs:
+            access.info('%s - "%s %s HTTP/%s" %d', "1.2.3.4", "GET", path, "1.1", 200)
+            access.info('%s - "%s %s HTTP/%s" %d', "1.2.3.4", "GET", "/api/x?token=t", "1.1", 200)
+        self.assertNotIn("s3cret", logs.output[0])
+        self.assertIn("?download=1&token=hidden&x=2", logs.output[0])
+        self.assertIn("/api/x?token=hidden", logs.output[1])
 
 
 if __name__ == "__main__":

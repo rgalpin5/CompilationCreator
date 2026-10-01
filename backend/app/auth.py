@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import math
 import re
 import secrets
@@ -29,6 +30,7 @@ from app.errors import ConfigurationError
 from app.throttle import FailureThrottle
 
 _FILE_ROUTE = re.compile(r"/api/compilations/([0-9a-f]{32})/file")
+_TOKEN_QUERY = re.compile(r"([?&])token=[^&]*")
 # Signs download tokens. Jobs live only in this process, so their links may too.
 _TOKEN_KEY = secrets.token_bytes(32)
 # Short passwords fall to guessing even with the throttle below.
@@ -86,6 +88,26 @@ def _sent_credentials(scope: Scope) -> bool:
         return True
     query = parse_qs(scope.get("query_string", b"").decode("latin-1"))
     return bool(query.get("token"))
+
+
+class _HideFileTokens(logging.Filter):
+    """Mask ``token=`` in uvicorn access-log lines so a log reader cannot reuse a link."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # uvicorn.access passes (client, method, path, http_version, status).
+        args = record.args
+        if isinstance(args, tuple) and len(args) > 2 and isinstance(args[2], str):
+            record.args = (*args[:2], _TOKEN_QUERY.sub(r"\1token=hidden", args[2]), *args[3:])
+        return True
+
+
+_access_log_filter = _HideFileTokens()
+
+
+def hide_tokens_in_access_log() -> None:
+    """Keep download tokens out of uvicorn's access log. Safe to call more than once."""
+    # Logger.addFilter skips a filter it already has.
+    logging.getLogger("uvicorn.access").addFilter(_access_log_filter)
 
 
 def _client_address(scope: Scope) -> str:
