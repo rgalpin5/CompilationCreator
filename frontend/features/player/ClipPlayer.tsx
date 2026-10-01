@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { YouTubeSession } from "./useYouTubePlayer";
+import { YouTubeSession } from "./YouTubeSession";
 
 type Props = {
   videoId: string;

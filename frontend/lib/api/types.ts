@@ -1,71 +1,16 @@
-export type Video = {
-  video_id: string;
-  title: string;
-  thumbnail: string | null;
-  duration_seconds: number | null;
-  url: string;
-  compilation_count: number;
-  channel?: string | null;
-  view_count?: number | null;
-};
+// Names the UI uses for the API's shapes. The shapes themselves are generated
+// from the backend's OpenAPI schema into schema.gen.ts; run
+// `./setup.sh api-types` after changing a backend model.
+import type { components } from "./schema.gen";
 
-export type ChannelPage = {
-  videos: Video[];
-  next_offset: number;
-  has_more: boolean;
-};
+type Schemas = components["schemas"];
 
-export type ClipPayload = {
-  video_id: string;
-  title: string;
-  start: string;
-  end: string;
-  order: number;
-  channel?: string | null;
-  view_count?: number | null;
-  duration_seconds?: number | null;
-  thumbnail?: string | null;
-};
-
-export type VideoLog = {
-  video_id: string;
-  title: string;
-  channel: string | null;
-  view_count: number | null;
-  duration_seconds: number | null;
-  thumbnail: string | null;
-  last_used: string | null;
-  count: number;
-};
-
-export type CompilationLog = {
-  name: string;
-  made: string;
-  clips: number;
-  duration_seconds: number;
-};
-
-export type Logs = {
-  videos: VideoLog[];
-  compilations: CompilationLog[];
-};
-
-export type JobStatus =
-  | "queued"
-  | "downloading"
-  | "concatenating"
-  | "ready"
-  | "saved"
-  | "failed"
-  | "cancelled";
-
-export type Job = {
-  id: string;
-  status: JobStatus;
-  progress: string | null;
-  error: string | null;
-  download_url: string | null;
-  /** Set on hosted deploys, where the browser downloads the MP4 itself. */
-  file_url: string | null;
-  saved_path: string | null;
-};
+export type Video = Schemas["VideoItem"];
+export type ChannelPage = Schemas["ChannelResponse"];
+export type ClipPayload = Schemas["Clip"];
+export type VideoLog = Schemas["UsageVideo"];
+export type CompilationLog = Schemas["CompilationEntry"];
+export type Logs = Schemas["UsageLogs"];
+/** An export job. ``file_url`` is set on hosted deploys, where the browser downloads the MP4 itself. */
+export type Job = Schemas["JobStatus"];
+export type JobStatus = Job["status"];

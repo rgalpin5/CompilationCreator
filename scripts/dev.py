@@ -7,6 +7,7 @@ this module. The commands are:
 - ``dev`` runs setup, then starts the API and the UI
 - ``lint`` runs Ruff, mypy, ESLint, and the TypeScript compiler
 - ``test`` runs the Python tests and the frontend unit tests
+- ``api-types`` regenerates the frontend API types from the backend schema
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ def main() -> None:
         "command",
         nargs="?",
         default="setup",
-        choices=("setup", "dev", "lint", "test"),
+        choices=("setup", "dev", "lint", "test", "api-types"),
     )
     args = parser.parse_args()
     commands = {
@@ -48,6 +49,7 @@ def main() -> None:
         "dev": cmd_dev,
         "lint": cmd_lint,
         "test": cmd_test,
+        "api-types": cmd_api_types,
     }
     commands[args.command]()
 
@@ -72,6 +74,8 @@ def cmd_setup() -> None:
         ],
         cwd=BACKEND,
     )
+    # The pin is a floor, so an existing virtualenv would keep an old yt-dlp.
+    _run([str(python), "-m", "pip", "install", "--upgrade", "yt-dlp"], cwd=BACKEND)
     _run([_npm(), "ci"], cwd=FRONTEND)
     _copy_if_missing(ROOT / ".env.example", ROOT / ".env")
     _copy_if_missing(FRONTEND / ".env.example", FRONTEND / ".env.local")
@@ -160,6 +164,7 @@ def cmd_lint() -> None:
         cwd=ROOT,
     )
     _run([npm, "run", "lint"], cwd=FRONTEND)
+    _run([npm, "run", "api-types:check"], cwd=FRONTEND)
     _run([npm, "run", "typecheck"], cwd=FRONTEND)
 
 
@@ -174,6 +179,15 @@ def cmd_test() -> None:
         cwd=ROOT,
     )
     _run([_npm(), "test"], cwd=FRONTEND)
+
+
+def cmd_api_types() -> None:
+    """Write the backend's OpenAPI schema, then generate the frontend types from it."""
+    python = _require_venv()
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(BACKEND)
+    _run([str(python), "-m", "app.openapi_schema"], cwd=BACKEND, env=env)
+    _run([_npm(), "run", "api-types"], cwd=FRONTEND)
 
 
 def _require_python() -> None:

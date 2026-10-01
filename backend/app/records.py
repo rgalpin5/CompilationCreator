@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from typing import NotRequired, TypedDict
+from typing import Literal, NotRequired, TypedDict
+
+JobState = Literal[
+    "queued", "downloading", "concatenating", "ready", "saved", "failed", "cancelled"
+]
 
 
 class JobRecord(TypedDict):
     """One export, as stored for the life of the API process."""
 
     id: str
-    status: str
+    status: JobState
     progress: str
     error: str | None
     dir: str
@@ -21,7 +25,7 @@ class JobRecord(TypedDict):
 class JobUpdate(TypedDict, total=False):
     """Fields ``JobStore.update`` accepts. Omitted keys stay as they are."""
 
-    status: str
+    status: JobState
     progress: str
     error: str | None
     dir: str

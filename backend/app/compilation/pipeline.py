@@ -88,6 +88,159 @@ def _record_usage(usage: UsageStore, ordered: list[Clip], job_id: str) -> str | 
         return None
 
 
+def _download_all(
+    store: JobStore,
+    job_id: str,
+    ordered: list[Clip],
+    job_dir: Path,
+    output_4k: bool,
+) -> list[Path]:
+    """Download every clip in parallel and return the raw files in timeline order."""
+    total = len(ordered)
+    store.update(
+        job_id,
+        status="downloading",
+        progress=f"Downloading clips (0 of {total} finished)",
+    )
+    done = 0
+    done_lock = threading.Lock()
+
+    def download(index: int) -> Path:
+        nonlocal done
+        clip = ordered[index]
+        runner.checkpoint()
+        path = download_section(
+            clip.video_id,
+            parse_timestamp(clip.start),
+            parse_timestamp(clip.end),
+            job_dir / f"raw_{index + 1:03d}",
+            output_4k=output_4k,
+            duration_seconds=clip.duration_seconds,
+        )
+        with done_lock:
+            done += 1
+            store.update(
+                job_id,
+                status="downloading",
+                progress=f"Downloading clips ({done} of {total} finished)",
+            )
+        return path
+
+    return _run_parallel(job_id, total, download_workers(total), download)
+
+
+def _prepare_all(
+    store: JobStore,
+    job_id: str,
+    raws: list[Path],
+    job_dir: Path,
+    output_4k: bool,
+) -> list[Path]:
+    """Bring every raw clip to the common layout and return the parts in order."""
+    total = len(raws)
+    runner.checkpoint()
+    layouts = [probe_layout(path) for path in raws]
+    plan = prep_plan(layouts)
+    if output_4k:
+        plan = fit_4k(plan, layouts)
+    labels = {
+        "audio": "Matching audio on clip {i} of {n}",
+        "video": (
+            "Scaling clip {i} of {n} to 4K"
+            if output_4k
+            else "Re-encoding clip {i} of {n} so the formats match"
+        ),
+        "keep": "Preparing clip {i} of {n}",
+    }
+
+    def prepare(index: int) -> Path:
+        runner.checkpoint()
+        prep = plan[index]
+        store.update(
+            job_id,
+            status="downloading",
+            progress=labels[prep.mode].format(i=index + 1, n=total),
+        )
+        part = job_dir / f"part_{index + 1:03d}.mp4"
+        finalize_clip(raws[index], part, prep)
+        return part
+
+    encodes_video = any(prep.mode == "video" for prep in plan)
+    return _run_parallel(
+        job_id,
+        total,
+        prepare_workers(total, encodes_video=encodes_video),
+        prepare,
+    )
+
+
+def _join(
+    store: JobStore,
+    job_id: str,
+    parts: list[Path],
+    raws: list[Path],
+    job_dir: Path,
+    output_4k: bool,
+) -> Path:
+    """Join ``parts`` into compilation.mp4, falling back to normalized re-encodes."""
+    output = job_dir / "compilation.mp4"
+    runner.checkpoint()
+    store.update(job_id, status="concatenating", progress="Joining clips")
+    try:
+        concat_clips(parts, output)
+        return output
+    except FfmpegError:
+        pass
+    normalized: list[Path] = []
+    for index, raw in enumerate(raws, start=1):
+        runner.checkpoint()
+        store.update(
+            job_id,
+            status="downloading",
+            progress=f"Re-encoding clip {index} of {len(raws)} so the formats match",
+        )
+        norm = job_dir / f"norm_{index:03d}.mp4"
+        normalize_clip(raw, norm, output_4k=output_4k)
+        normalized.append(norm)
+    output.unlink(missing_ok=True)
+    store.update(job_id, status="concatenating", progress="Joining clips")
+    try:
+        concat_clips(normalized, output)
+    except FfmpegError:
+        output.unlink(missing_ok=True)
+        store.update(job_id, status="concatenating", progress="Joining clips")
+        concat_reencode(normalized, output)
+    return output
+
+
+def _finish(
+    store: JobStore,
+    job_id: str,
+    ordered: list[Clip],
+    output: Path,
+    job_dir: Path,
+    usage: UsageStore | None,
+) -> None:
+    """Record usage, then mark the job ready."""
+    runner.checkpoint()
+    if usage:
+        name = _record_usage(usage, ordered, job_id)
+        if name:
+            store.update(job_id, filename=name)
+    # Ready comes last so a save never sees the job before its file name.
+    store.update(
+        job_id,
+        status="ready",
+        progress="Ready",
+        error=None,
+        output_path=str(output),
+    )
+    if runner.is_cancelled(job_id):
+        # Cancel arrived after the last checkpoint. The ready update was
+        # ignored, so the finished file would otherwise stay on disk.
+        shutil.rmtree(job_dir, ignore_errors=True)
+
+
 def run_compilation(
     store: JobStore,
     job_id: str,
@@ -110,115 +263,10 @@ def run_compilation(
     token = runner.bind(job_id)
 
     try:
-        total = len(ordered)
-        store.update(
-            job_id,
-            status="downloading",
-            progress=f"Downloading clips (0 of {total} finished)",
-        )
-        done = 0
-        done_lock = threading.Lock()
-
-        def download(index: int) -> Path:
-            nonlocal done
-            clip = ordered[index]
-            runner.checkpoint()
-            path = download_section(
-                clip.video_id,
-                parse_timestamp(clip.start),
-                parse_timestamp(clip.end),
-                job_dir / f"raw_{index + 1:03d}",
-                output_4k=output_4k,
-                duration_seconds=clip.duration_seconds,
-            )
-            with done_lock:
-                done += 1
-                store.update(
-                    job_id,
-                    status="downloading",
-                    progress=f"Downloading clips ({done} of {total} finished)",
-                )
-            return path
-
-        raws = _run_parallel(job_id, total, download_workers(total), download)
-
-        runner.checkpoint()
-        layouts = [probe_layout(path) for path in raws]
-        plan = prep_plan(layouts)
-        if output_4k:
-            plan = fit_4k(plan, layouts)
-        labels = {
-            "audio": "Matching audio on clip {i} of {n}",
-            "video": (
-                "Scaling clip {i} of {n} to 4K"
-                if output_4k
-                else "Re-encoding clip {i} of {n} so the formats match"
-            ),
-            "keep": "Preparing clip {i} of {n}",
-        }
-
-        def prepare(index: int) -> Path:
-            runner.checkpoint()
-            prep = plan[index]
-            store.update(
-                job_id,
-                status="downloading",
-                progress=labels[prep.mode].format(i=index + 1, n=total),
-            )
-            part = job_dir / f"part_{index + 1:03d}.mp4"
-            finalize_clip(raws[index], part, prep)
-            return part
-
-        encodes_video = any(prep.mode == "video" for prep in plan)
-        parts = _run_parallel(
-            job_id,
-            total,
-            prepare_workers(total, encodes_video=encodes_video),
-            prepare,
-        )
-
-        output = job_dir / "compilation.mp4"
-        runner.checkpoint()
-        store.update(job_id, status="concatenating", progress="Joining clips")
-        try:
-            concat_clips(parts, output)
-        except FfmpegError:
-            normalized: list[Path] = []
-            for index, raw in enumerate(raws, start=1):
-                runner.checkpoint()
-                store.update(
-                    job_id,
-                    status="downloading",
-                    progress=f"Re-encoding clip {index} of {len(raws)} so the formats match",
-                )
-                norm = job_dir / f"norm_{index:03d}.mp4"
-                normalize_clip(raw, norm, output_4k=output_4k)
-                normalized.append(norm)
-            output.unlink(missing_ok=True)
-            store.update(job_id, status="concatenating", progress="Joining clips")
-            try:
-                concat_clips(normalized, output)
-            except FfmpegError:
-                output.unlink(missing_ok=True)
-                store.update(job_id, status="concatenating", progress="Joining clips")
-                concat_reencode(normalized, output)
-        runner.checkpoint()
-        if usage:
-            name = _record_usage(usage, ordered, job_id)
-            if name:
-                store.update(job_id, filename=name)
-        # Ready comes last so a save never sees the job before its file name.
-        store.update(
-            job_id,
-            status="ready",
-            progress="Ready",
-            error=None,
-            output_path=str(output),
-        )
-        if runner.is_cancelled(job_id):
-            # Cancel arrived after the last checkpoint. The ready update was
-            # ignored, so the finished file would otherwise stay on disk.
-            shutil.rmtree(job_dir, ignore_errors=True)
+        raws = _download_all(store, job_id, ordered, job_dir, output_4k)
+        parts = _prepare_all(store, job_id, raws, job_dir, output_4k)
+        output = _join(store, job_id, parts, raws, job_dir, output_4k)
+        _finish(store, job_id, ordered, output, job_dir, usage)
     except JobCancelled:
         shutil.rmtree(job_dir, ignore_errors=True)
         store.update(

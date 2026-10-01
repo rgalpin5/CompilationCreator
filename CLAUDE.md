@@ -10,8 +10,9 @@ All top-level commands go through `scripts/dev.py` (via `./setup.sh <cmd>`, `set
 
 - `./setup.sh` creates `backend/.venv`, installs pinned deps, runs `npm ci`, and copies `.env.example` files when missing.
 - `./setup.sh dev` starts the API on :8000 and the UI on :3000.
-- `./setup.sh lint` runs Ruff (`app tests ../scripts ../packaging`), mypy on the backend and on `scripts/`, then ESLint (`--max-warnings 0`) and `tsc --noEmit`.
+- `./setup.sh lint` runs Ruff (`app tests ../scripts ../packaging`), mypy on the backend and on `scripts/`, then ESLint (`--max-warnings 0`), the generated API types check, and `tsc --noEmit`.
 - `./setup.sh test` runs backend unittest, `scripts/test_*.py` and frontend vitest.
+- `./setup.sh api-types` regenerates `frontend/lib/api/openapi.json` and `schema.gen.ts` from the FastAPI app. Run it after changing any request/response model, and commit both files. `tests/test_openapi_schema.py` and `lint` (`npm run api-types:check`) fail when they are stale.
 
 Single tests:
 
@@ -44,17 +45,17 @@ Backend tests use `unittest` (not pytest) and never touch YouTube or run ffmpeg;
 
 **Cookies** (`backend/app/youtube/cookies.py`) are resolved in this order: `YTDLP_COOKIES_FILE`, then `YTDLP_COOKIES` (raw text or base64), then `YTDLP_COOKIES_BROWSER`. The desktop app fills in the browser automatically.
 
-**Desktop build:** `packaging/build.py` exports the Next.js UI statically (`DESKTOP_EXPORT=1`, empty API base), bundles ffmpeg, and runs PyInstaller. `packaging/entry.py` and `backend/app/desktop/` start a local API on a free port, mount the static UI, and open a pywebview window. The `Desktop packages` CI workflow commits built installers to `dist/` (Git LFS) on pushes to `main` that touch `backend/`, `frontend/` or `packaging/`.
+**Desktop build:** `packaging/build.py` exports the Next.js UI statically (`DESKTOP_EXPORT=1`, empty API base), bundles ffmpeg, and runs PyInstaller. `packaging/entry.py` and `backend/app/desktop/` start a local API on a free port, mount the static UI, and open a pywebview window. The `Desktop packages` CI workflow uploads built installers to the rolling `desktop-latest` GitHub Release (plus a per-tag release for `v*` tags) on pushes to `main` that touch `backend/`, `frontend/` or `packaging/`, and on a weekly schedule when PyPI has a newer yt-dlp than the release notes record. `dist/` is local build output and is git-ignored.
 
-**Frontend:** a single page (`frontend/app/page.tsx`) switches between the Editor and Logs views. Code is organized by feature under `frontend/features/` (channel, timeline, cuts, player, export, logs). All HTTP calls go through `frontend/lib/api/`. `NEXT_PUBLIC_API_URL` is inlined at build time; leave it empty for same-origin `/api`.
+**Frontend:** a single page (`frontend/app/page.tsx`) switches between the Editor and Logs views. Code is organized by feature under `frontend/features/` (channel, timeline, cuts, player, export, logs). All HTTP calls go through `frontend/lib/api/`; `types.ts` there only aliases the generated `schema.gen.ts`, so never hand-edit API shapes on the frontend. `NEXT_PUBLIC_API_URL` is inlined at build time; leave it empty for same-origin `/api`.
 
 ## Conventions and gotchas
 
 - **Next.js 16 has breaking changes from older versions.** Before writing frontend code, read the relevant guide in `frontend/node_modules/next/dist/docs/` (see `frontend/AGENTS.md`). `next dev` re-adds that block to `frontend/AGENTS.md`, so commit it rather than removing it.
-- **Dependency pins must match across files.** `backend/pyproject.toml`, `backend/requirements.txt`, `backend/requirements-dev.txt` and `packaging/requirements-desktop.txt` must carry identical pins, and `tests/test_dependencies.py` enforces it. Pins are lower bounds on purpose so yt-dlp can move forward.
+- **Dependency pins must match across files.** `backend/pyproject.toml`, `backend/requirements.txt`, `backend/requirements-dev.txt` and `packaging/requirements-desktop.txt` must carry identical pins, and `tests/test_dependencies.py` enforces it. Pins are lower bounds on purpose so yt-dlp can move forward; setup and the desktop build also run `pip install --upgrade yt-dlp`, and CI runs weekly against the newest release.
 - **mypy is strict** (`disallow_untyped_defs` and more). Ruff uses line length 100 with a wide rule set. Multiplication-sign dimension strings such as `1920×1080` are intentional (RUF001–003 are ignored).
 - From `.cursorrules`: keep modules single-responsibility, type everything strictly, and handle errors so the local process doesn't crash. All filesystem and path code must work on Windows, macOS and Linux.
-- `backend/app/stubs/` (GCS, YouTube upload, autopilot) is not imported anywhere, so treat it as design notes.
+- `docs/roadmap.md` outlines unbuilt features (Cloud Storage delivery, YouTube upload, autopilot). Don't implement them unless asked.
 - Respect `JOBS_DIR` rather than hardcoding paths. Its default differs on Vercel (`/tmp/compcreator/jobs`) and in the desktop app (Application Support / `%APPDATA%`).
 
 ## Trust boundaries

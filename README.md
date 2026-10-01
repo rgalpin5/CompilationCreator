@@ -94,7 +94,6 @@ CompCreator/
     app/compilation/       timeline checks and the export pipeline
     app/jobs/              job store and process runner
     app/usage/             compilation log
-    app/stubs/             GCS, YouTube upload, and autopilot outlines
     tests/                 unittest modules
     Dockerfile
     requirements.txt       runtime packages (mirrors pyproject.toml)
@@ -104,7 +103,7 @@ CompCreator/
     app/page.tsx           editor and logs view switch
     features/              channel, timeline, cuts, player, export, logs
     components/ui/         shadcn
-    lib/api/               browser API client
+    lib/api/               browser API client and generated API types
     lib/time.ts            client-side time checks
   packaging/               desktop build (PyInstaller, bundled ffmpeg)
   scripts/dev.py           shared local setup and run implementation
@@ -112,7 +111,7 @@ CompCreator/
   setup.bat                Windows entry point
   docker-compose.yml       backend only
   vercel.json              Next.js UI on Vercel (the API runs on Cloud Run)
-  dist/                    desktop installers, when built
+  dist/                    local desktop build output (git-ignored)
 ```
 
 ## API
@@ -194,17 +193,21 @@ From the repository root:
 # macOS or Linux
 ./setup.sh          # create the virtualenv, install dependencies, write env files
 ./setup.sh dev      # set up, then start the API and the UI
-./setup.sh lint     # Ruff, mypy, ESLint, and tsc
+./setup.sh lint     # Ruff, mypy, ESLint, API type freshness, and tsc
 ./setup.sh test     # Python unit tests
+./setup.sh api-types  # regenerate frontend API types after changing a backend model
 
 # Windows
 setup.bat
 setup.bat dev
 setup.bat lint
 setup.bat test
+setup.bat api-types
 ```
 
-`make setup`, `make dev`, `make lint`, and `make test` run the same commands.
+`make setup`, `make dev`, `make lint`, `make test`, and `make api-types` run the same commands.
+
+The frontend's API types are generated, not written by hand. `./setup.sh api-types` writes the backend's OpenAPI schema to `frontend/lib/api/openapi.json` and generates `frontend/lib/api/schema.gen.ts` from it; `frontend/lib/api/types.ts` gives those shapes the names the UI uses. Commit both generated files. A backend test and `./setup.sh lint` fail when they are out of date.
 
 ### Backend with a virtualenv
 
@@ -276,10 +279,12 @@ curl -X POST http://localhost:8000/api/compilations/<job_id>/download \
 
 ## Desktop app
 
-Installers, when present in the repository:
+Installers from the latest build of `main` are on the [desktop-latest release](https://github.com/rgalpin5/CompilationCreator/releases/tag/desktop-latest):
 
-- macOS: [dist/CompCreator-mac.dmg](dist/CompCreator-mac.dmg)
-- Windows: [dist/CompCreator-windows.exe](dist/CompCreator-windows.exe)
+- macOS: [CompCreator-mac.dmg](https://github.com/rgalpin5/CompilationCreator/releases/download/desktop-latest/CompCreator-mac.dmg)
+- Windows: [CompCreator-windows.exe](https://github.com/rgalpin5/CompilationCreator/releases/download/desktop-latest/CompCreator-windows.exe)
+
+Tagged versions have their own entries on the [releases page](https://github.com/rgalpin5/CompilationCreator/releases).
 
 The window is the app. It starts a local API, serves the exported UI from that process, and saves finished videos to Downloads or to the folder you type. Working clips are deleted on save.
 
@@ -305,7 +310,7 @@ A Mac produces `dist/CompCreator-mac.dmg` only. Windows produces `dist/CompCreat
 python packaging/build.py
 ```
 
-The `Desktop packages` GitHub Actions workflow builds both installers and commits them back to `dist/` on a manual run, a `v*` tag, or a push to `main` that changes `backend/`, `frontend/`, `packaging/`, or `.gitattributes`.
+The `Desktop packages` GitHub Actions workflow builds both installers on a manual run, a `v*` tag, or a push to `main` that changes `backend/`, `frontend/`, `packaging/`, or the workflow itself. It replaces the assets on the rolling `desktop-latest` release, and a `v*` tag also gets a release of its own. Installers are not committed to git. A weekly scheduled run rebuilds them when a newer yt-dlp is on PyPI than the one recorded in the release notes, so the published app keeps up with YouTube changes. The `Checks` workflow also runs weekly against the newest yt-dlp, and `./setup.sh` and `packaging/build.py` upgrade yt-dlp in existing virtualenvs.
 
 ## Deploy
 
@@ -332,7 +337,7 @@ gcloud run deploy compcreator-api \
 
 Cloud Run sets `K_SERVICE`, which makes the API a hosted server: it refuses to start without `COMPCREATOR_PASSWORD`, sends finished videos to the browser through `/api/compilations/{job_id}/file`, and does not save into server folders. `--allow-unauthenticated` lets browsers reach the service; the password protects it. Add `YTDLP_COOKIES=<secret>:latest` to `--set-secrets` when YouTube requires a signed-in session, and never commit cookie files.
 
-`--max-instances 1` keeps status polls and the download on the instance that holds the job. In-memory jobs and local MP4s do not survive a restart and are not shared across instances. Several origins need a custom gcloud delimiter because `--set-env-vars` splits on commas: `--set-env-vars "^;^CORS_ORIGINS=https://a.example,https://b.example"`. A later GCS signed-URL path is sketched in `backend/app/stubs/gcs_download.py` and is not wired up.
+`--max-instances 1` keeps status polls and the download on the instance that holds the job. In-memory jobs and local MP4s do not survive a restart and are not shared across instances. Several origins need a custom gcloud delimiter because `--set-env-vars` splits on commas: `--set-env-vars "^;^CORS_ORIGINS=https://a.example,https://b.example"`. A later Cloud Storage signed-URL path is outlined in [docs/roadmap.md](docs/roadmap.md) and is not built.
 
 ### UI on Vercel
 
@@ -340,10 +345,10 @@ Cloud Run sets `K_SERVICE`, which makes the API a hosted server: it refuses to s
 
 ## Not wired up
 
-These modules are comments and unused functions. Nothing imports them.
+[docs/roadmap.md](docs/roadmap.md) outlines features that are not built:
 
-- `backend/app/stubs/gcs_download.py` — upload a finished MP4 and return a signed URL.
-- `backend/app/stubs/youtube_upload.py` — upload a finished compilation with the YouTube Data API.
-- `backend/app/stubs/autopilot.py` — scheduled channel scans that suggest compilation ideas.
+- Cloud Storage delivery: upload a finished MP4 and return a signed URL.
+- YouTube upload: upload a finished compilation with the YouTube Data API.
+- Autopilot: scheduled channel scans that suggest compilation ideas.
 
 `max_video_height` in `backend/app/youtube/formats.py` is also unused by the current routes.

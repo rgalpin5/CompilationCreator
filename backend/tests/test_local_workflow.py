@@ -7,7 +7,6 @@ cleared so the test cannot read a browser profile or write a cookie file.
 
 import asyncio
 import contextlib
-import json
 import os
 import subprocess
 import tempfile
@@ -168,13 +167,7 @@ def _run_export(
     body: CompilationRequest,
 ) -> str:
     tasks = BackgroundTasks()
-    response = compilations.create_compilation(body, tasks, jobs, usage)
-    if response.status_code != 202:
-        raise AssertionError(response.body)
-    payload = json.loads(bytes(response.body))
-    job_id = payload["id"]
-    if not isinstance(job_id, str):
-        raise AssertionError(payload)
+    job_id = compilations.create_compilation(body, tasks, jobs, usage).id
     asyncio.run(tasks())
     return job_id
 

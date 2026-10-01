@@ -2,7 +2,7 @@ import threading
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
 from app.auth import file_token
@@ -33,13 +33,13 @@ router = APIRouter()
 _save_lock = threading.Lock()
 
 
-@router.post("/compilations", status_code=202)
+@router.post("/compilations", status_code=202, response_model=JobStatus)
 def create_compilation(
     body: CompilationRequest,
     background_tasks: BackgroundTasks,
     job_store: JobStore = Depends(get_job_store),
     usage_store: UsageStore = Depends(get_usage_store),
-) -> JSONResponse:
+) -> JobStatus:
     """Start an export and return the queued job."""
     try:
         clips = validate_timeline(body.clips)
@@ -55,7 +55,7 @@ def create_compilation(
     background_tasks.add_task(
         run_compilation, job_store, job["id"], clips, body.output_4k, usage_store
     )
-    return JSONResponse(status_code=202, content=_public(job).model_dump())
+    return _public(job)
 
 
 @router.get("/compilations/{job_id}", response_model=JobStatus)

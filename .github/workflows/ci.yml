@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  # yt-dlp is pinned only from below, so every run installs its newest release.
+  # A weekly run catches a yt-dlp release that breaks the app between pushes.
+  schedule:
+    - cron: "0 6 * * 1"
   # Desktop packages runs these first so a failing build never ships an installer.
   workflow_call:
 
@@ -19,7 +23,6 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      # The committed installers live in LFS and are not needed here.
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -39,6 +42,12 @@ jobs:
         run: choco install ffmpeg -y --no-progress
       - name: Set up
         run: python scripts/dev.py setup
+      - name: Show the yt-dlp version under test
+        shell: bash
+        run: |
+          py=backend/.venv/bin/python
+          [ -x "$py" ] || py=backend/.venv/Scripts/python.exe
+          "$py" -c "import yt_dlp.version as v; print('yt-dlp', v.__version__)"
       - name: Lint
         if: runner.os == 'Linux'
         run: python scripts/dev.py lint

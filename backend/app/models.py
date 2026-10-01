@@ -1,15 +1,23 @@
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.records import JobState
 
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+class _Response(BaseModel):
+    """A response body. Every field is always sent, so the schema marks them all required."""
+
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
 
 
 class ChannelRequest(BaseModel):
     url: str = Field(min_length=3, max_length=500)
 
 
-class VideoItem(BaseModel):
+class VideoItem(_Response):
     video_id: str
     title: str
     thumbnail: str | None = None
@@ -20,7 +28,7 @@ class VideoItem(BaseModel):
     view_count: int | None = None
 
 
-class ChannelResponse(BaseModel):
+class ChannelResponse(_Response):
     videos: list[VideoItem]
     next_offset: int = 0
     has_more: bool = False
@@ -60,9 +68,9 @@ class DownloadRequest(BaseModel):
     directory: str | None = None
 
 
-class JobStatus(BaseModel):
+class JobStatus(_Response):
     id: str
-    status: str
+    status: JobState
     progress: str
     error: str | None = None
     download_url: str | None = None

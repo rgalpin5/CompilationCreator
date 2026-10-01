@@ -27,9 +27,7 @@ frontend/.env.local
 !.env.example
 
 # Desktop packages
-/dist/*
-!/dist/CompCreator-mac.dmg
-!/dist/CompCreator-windows.exe
+/dist/
 /build/
 /packaging/vendor/
 
