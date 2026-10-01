@@ -5,7 +5,6 @@ import os
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import cast
 
 from app.errors import ConfigurationError, ensure_directory
 from app.records import CompilationEntry, UsageClip, UsageLogs, UsageVideo
@@ -61,13 +60,17 @@ class UsageStore:
         loaded_videos = raw_videos if isinstance(raw_videos, dict) else {}
         raw_compilations = data.get("compilations")
         compilations = raw_compilations if isinstance(raw_compilations, list) else []
-        clean_videos = {
-            video_id: cast(UsageVideo, entry)
-            for video_id, entry in loaded_videos.items()
-            if isinstance(video_id, str) and isinstance(entry, dict)
-        }
+        # A hand-edited log may hold rows of the wrong shape. Drop those rows
+        # (and loose optional fields) rather than fail later with a 500.
+        clean_videos: dict[str, UsageVideo] = {}
+        for video_id, entry in loaded_videos.items():
+            video = _clean_video(video_id, entry)
+            if video is not None:
+                clean_videos[video_id] = video
         clean_compilations = [
-            cast(CompilationEntry, entry) for entry in compilations if isinstance(entry, dict)
+            compilation
+            for compilation in (_clean_compilation(entry) for entry in compilations)
+            if compilation is not None
         ]
         return clean_videos, clean_compilations
 
@@ -170,6 +173,56 @@ def _blank_video(video_id: str, count: int) -> UsageVideo:
         "last_used": None,
         "count": count,
     }
+
+
+def _is_count(value: object) -> bool:
+    # bool is an int subclass, but true/false is not a count.
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _optional_text(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _optional_count(value: object) -> int | None:
+    return value if isinstance(value, int) and _is_count(value) else None
+
+
+def _clean_video(video_id: object, entry: object) -> UsageVideo | None:
+    """A well-formed copy of a loaded video row, or None when it has no valid count."""
+    if not isinstance(video_id, str) or not isinstance(entry, dict):
+        return None
+    count = entry.get("count")
+    if not isinstance(count, int) or not _is_count(count):
+        return None
+    title = entry.get("title")
+    return {
+        "video_id": video_id,
+        "title": title if isinstance(title, str) and title else video_id,
+        "channel": _optional_text(entry.get("channel")),
+        "view_count": _optional_count(entry.get("view_count")),
+        "duration_seconds": _optional_count(entry.get("duration_seconds")),
+        "thumbnail": _optional_text(entry.get("thumbnail")),
+        "last_used": _optional_text(entry.get("last_used")),
+        "count": count,
+    }
+
+
+def _clean_compilation(entry: object) -> CompilationEntry | None:
+    """A loaded compilation row, or None when a field is missing or the wrong type."""
+    if not isinstance(entry, dict):
+        return None
+    name = entry.get("name")
+    made = entry.get("made")
+    clips = entry.get("clips")
+    duration = entry.get("duration_seconds")
+    if not isinstance(name, str) or not isinstance(made, str):
+        return None
+    if not isinstance(clips, int) or not _is_count(clips):
+        return None
+    if not isinstance(duration, int) or not _is_count(duration):
+        return None
+    return {"name": name, "made": made, "clips": clips, "duration_seconds": duration}
 
 
 def _compilation_name(now: datetime, compilations: list[CompilationEntry]) -> str:
