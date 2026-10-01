@@ -149,7 +149,7 @@ A compilation body looks like this:
 }
 ```
 
-`video_id` must be an 11-character YouTube id. `start` and `end` are `mm:ss` or `hh:mm:ss`, and `end` must be after `start`. At least one clip is required. There is no maximum clip count.
+`video_id` must be an 11-character YouTube id. `start` and `end` are `mm:ss` or `hh:mm:ss`, and `end` must be after `start`. An export needs 1 to 100 clips and at most 4 hours of kept time in total. Only one export runs at a time; starting another while one is running returns `409`.
 
 Job statuses: `queued`, `downloading`, `concatenating`, `ready`, `saved`, `failed`, `cancelled`. While the status is `ready`, a local or desktop server sets `download_url` (save into a folder) and a hosted server sets `file_url` (download in the browser). A server counts as hosted when `VERCEL` or `K_SERVICE` (Cloud Run) is set. `saved_path` is present after a folder save and is the only remaining copy. A browser download ends in `saved` with no `saved_path`, and `file_url` stays available for 10 minutes.
 

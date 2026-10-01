@@ -35,7 +35,17 @@ class JobStore:
         self._jobs: dict[str, JobRecord] = {}
         self._touched: dict[str, float] = {}
         self._lock = threading.Lock()
+        # Held across the idle check and the create so two requests cannot both pass.
+        self._create_lock = threading.Lock()
         self.sweep()
+
+    def create_if_idle(self) -> JobRecord | None:
+        """Like ``create``, but ``None`` while another export is still running."""
+        with self._create_lock:
+            with self._lock:
+                if any(job["status"] in _ACTIVE for job in self._jobs.values()):
+                    return None
+            return self.create()
 
     def create(self) -> JobRecord:
         """Reserve a new job id and an empty working folder."""

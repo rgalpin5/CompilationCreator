@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from app.compilation.validate import validate_timeline, videos_missing_4k
+from app.compilation.validate import MAX_CLIPS, validate_timeline, videos_missing_4k
 from app.models import Clip
 from app.timeparse import format_timestamp, parse_timestamp
 from app.youtube.urls import ChannelError, normalize_channel_url
@@ -54,6 +54,21 @@ class TimelineTests(unittest.TestCase):
     def test_allows_clip_over_thirty_five_minutes(self) -> None:
         clip = Clip(video_id="abcdefghijk", title="Long", start="00:00", end="1:10:00", order=0)
         self.assertEqual(validate_timeline([clip])[0].title, "Long")
+
+    def test_rejects_too_many_clips(self) -> None:
+        def clip(i: int) -> Clip:
+            return Clip(video_id="abcdefghijk", start="00:00", end="00:05", order=i)
+
+        self.assertEqual(len(validate_timeline([clip(i) for i in range(MAX_CLIPS)])), MAX_CLIPS)
+        with self.assertRaisesRegex(ValueError, "at most 100 clips"):
+            validate_timeline([clip(i) for i in range(MAX_CLIPS + 1)])
+
+    def test_rejects_a_timeline_over_the_total_length(self) -> None:
+        full = Clip(video_id="abcdefghijk", start="00:00", end="2:00:00", order=0)
+        self.assertEqual(len(validate_timeline([full, full])), 2)
+        extra = Clip(video_id="abcdefghijl", start="00:00", end="00:01", order=1)
+        with self.assertRaisesRegex(ValueError, "at most 4 hours"):
+            validate_timeline([full, full, extra])
 
 
 class FourKTests(unittest.TestCase):

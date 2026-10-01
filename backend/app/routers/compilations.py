@@ -45,7 +45,12 @@ def create_compilation(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    job = job_store.create()
+    job = job_store.create_if_idle()
+    if job is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Another export is still running. Wait for it to finish or cancel it.",
+        )
     background_tasks.add_task(
         run_compilation, job_store, job["id"], clips, body.output_4k, usage_store
     )

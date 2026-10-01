@@ -3,6 +3,7 @@ import tempfile
 import time
 import unittest
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -101,6 +102,26 @@ class SweepTests(unittest.TestCase):
             self.assertTrue(old.is_dir())
             self.assertEqual(jobs.sweep(), 1)
             self.assertFalse(old.exists())
+
+
+class OneExportAtATimeTests(unittest.TestCase):
+    def test_create_if_idle_waits_for_the_running_export(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs = JobStore(Path(tmp) / "jobs")
+            first = jobs.create_if_idle()
+            assert first is not None
+            self.assertIsNone(jobs.create_if_idle())
+            jobs.update(first["id"], status="downloading")
+            self.assertIsNone(jobs.create_if_idle())
+            jobs.update(first["id"], status="ready")
+            self.assertIsNotNone(jobs.create_if_idle())
+
+    def test_only_one_of_many_simultaneous_requests_starts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs = JobStore(Path(tmp) / "jobs")
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                results = list(pool.map(lambda _: jobs.create_if_idle(), range(16)))
+            self.assertEqual(sum(result is not None for result in results), 1)
 
 
 if __name__ == "__main__":
