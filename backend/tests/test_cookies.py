@@ -108,6 +108,24 @@ class PrivateCookieTests(unittest.TestCase):
         if sys.platform != "win32":
             self.assertEqual(stat.S_IMODE(os.stat(first).st_mode), 0o600)
 
+    def test_env_cookie_file_is_removed_at_exit(self) -> None:
+        body = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tcleanup-test"
+        with (
+            patch.dict(os.environ, {"YTDLP_COOKIES": body}, clear=True),
+            patch("app.youtube.cookies.atexit.register") as register,
+        ):
+            path = _cookiefile()
+            self.assertEqual(_cookiefile(), path)
+        assert path is not None
+        register.assert_called_once()
+        cleanup, registered_path = register.call_args.args
+        self.assertEqual(registered_path, path)
+        self.assertTrue(Path(path).is_file())
+        cleanup(registered_path)
+        self.assertFalse(Path(path).exists())
+        # A second run at exit, after the file is gone, does not raise.
+        cleanup(registered_path)
+
 
 if __name__ == "__main__":
     unittest.main()

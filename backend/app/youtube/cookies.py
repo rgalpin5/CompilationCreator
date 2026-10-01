@@ -1,5 +1,6 @@
 """YouTube cookie file, browser login, and the Deno path yt-dlp needs."""
 
+import atexit
 import base64
 import contextlib
 import os
@@ -128,7 +129,16 @@ def _cookiefile() -> str | None:
             return cached
         written = _write_private(body.encode("utf-8"), purpose="cookie file")
         _env_cookie_files[body] = written
+        # Each path is new from mkstemp, so it is registered exactly once.
+        atexit.register(_remove_quietly, written)
         return written
+
+
+def _remove_quietly(path: str) -> None:
+    """Delete ``path`` if it still exists, ignoring errors at shutdown."""
+    # The file is closed after writing, so Windows can delete it too.
+    with contextlib.suppress(OSError):
+        os.unlink(path)
 
 
 @contextmanager
