@@ -1,3 +1,5 @@
+import { UnauthorizedError, authHeaders, storedPassword } from "./auth";
+
 // Same origin by default. Vercel rewrites `/api/*` and `/health` to the
 // backend service, and the API already mounts its routes under `/api`.
 // Set NEXT_PUBLIC_API_URL only when the API is on another origin, such as
@@ -17,7 +19,11 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(storedPassword()),
+        ...init?.headers,
+      },
     });
   } catch (caught: unknown) {
     if (caught instanceof TypeError) {
@@ -29,6 +35,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const body = await readJson(res);
+  if (res.status === 401) {
+    throw new UnauthorizedError(detailMessage(body, res.status));
+  }
   if (!res.ok) {
     throw new Error(detailMessage(body, res.status));
   }

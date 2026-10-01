@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.auth import PasswordMiddleware, require_password_when_hosted
 from app.config import settings
 from app.errors import ConfigurationError, stop_for_local_error, terminal_message
 from app.jobs.store import JobStore
@@ -16,11 +17,11 @@ from app.usage.store import UsageStore
 async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     """Open the usage log and the jobs folder for this process.
 
-    A folder that cannot be created, or a usage log that cannot be read,
-    prints one line and stops the process. The server does not stay up
-    without those files.
+    A hosted server without a password, a folder that cannot be created, or a
+    usage log that cannot be read prints one line and stops the process.
     """
     try:
+        require_password_when_hosted()
         application.state.usage_store = UsageStore(settings.jobs_dir.parent / "usage.json")
         application.state.job_store = JobStore(settings.jobs_dir)
     except (ConfigurationError, OSError) as exc:
@@ -29,6 +30,8 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="CompCreator", lifespan=_lifespan)
+# Middleware added later wraps earlier middleware, so CORS stays outermost.
+app.add_middleware(PasswordMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -62,4 +65,10 @@ async def missing_file(_request: Request, exc: FileNotFoundError) -> JSONRespons
 @app.get("/health")
 def health() -> dict[str, bool]:
     """Report that the API process is accepting requests."""
+    return {"ok": True}
+
+
+@app.get("/api/session")
+def session() -> dict[str, bool]:
+    """Answer 200 when the request may use the API, so the UI can ask for a password first."""
     return {"ok": True}

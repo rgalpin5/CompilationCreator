@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import PasswordGate from "@/features/auth/PasswordGate";
 import ChannelForm from "@/features/channel/ChannelForm";
 import { useChannelFeed } from "@/features/channel/useChannelFeed";
 import VideoGrid from "@/features/channel/VideoGrid";
@@ -16,6 +17,14 @@ import { validateClips } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
+  return (
+    <PasswordGate>
+      <Editor />
+    </PasswordGate>
+  );
+}
+
+function Editor() {
   const [stage, setStage] = useState<"pick" | "cuts">("pick");
   const [view, setView] = useState<"editor" | "logs">("editor");
   const [output4k, setOutput4k] = useState(false);

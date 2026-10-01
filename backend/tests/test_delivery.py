@@ -279,6 +279,19 @@ class BrowserDownloadTests(unittest.TestCase):
             self.assertEqual(caught.exception.status_code, 409)
             self.assertTrue((job_dir / "compilation.mp4").is_file())
 
+    def test_hosted_file_url_carries_a_token_when_a_password_is_set(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs, job, _ = _ready_job(Path(tmp))
+            with (
+                patch.object(compilations.settings, "hosted", True),
+                patch.object(compilations.settings, "password", "synthetic-test-password"),
+            ):
+                status = compilations.compilation_status(job["id"], jobs)
+                expected = compilations.file_token(job["id"])
+            self.assertEqual(
+                status.file_url, f"/api/compilations/{job['id']}/file?token={expected}"
+            )
+
     def test_local_status_keeps_the_folder_save(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             jobs, job, _ = _ready_job(Path(tmp))

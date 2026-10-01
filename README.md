@@ -120,6 +120,7 @@ CompCreator/
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | `{ "ok": true }` |
+| `GET` | `/api/session` | `200` when the request may use the API, `401` when the password is missing or wrong |
 | `POST` | `/api/channels?limit=&offset=` | One page of videos for a channel URL |
 | `POST` | `/api/compilations` | Start an export. Returns `202` and a job |
 | `GET` | `/api/compilations/{job_id}` | Status and progress |
@@ -165,6 +166,7 @@ Backend (`backend/app/config.py` and the yt-dlp helpers):
 | `YTDLP_COOKIES` | unset | Cookie file contents, or the same contents in base64. A temp file is written with mode `0600` |
 | `YTDLP_COOKIES_BROWSER` | unset | Browser to read cookies from. `none` skips browser cookies. The desktop app fills this in |
 | `YTDLP_DENO` | discovered | Full path to Deno when cookies are used |
+| `COMPCREATOR_PASSWORD` | unset | Shared password for the API. Required on a hosted server (`VERCEL` or `K_SERVICE` set), which refuses to start without it. Every `/api` request must send `Authorization: Bearer <password>`; `/health` stays open. The UI asks for it once and remembers it in that browser. A finished video's `file_url` carries a token that unlocks only that job's file, so the password never appears in a link. Leave it unset for local use and the desktop app |
 | `COMPCREATOR_DESKTOP` | unset | Set by the desktop launcher |
 
 Frontend:

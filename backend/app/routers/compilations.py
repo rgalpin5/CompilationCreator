@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 
+from app.auth import file_token
 from app.compilation.pipeline import run_compilation
 from app.compilation.validate import validate_timeline
 from app.config import settings
@@ -216,6 +217,11 @@ def _public(job: JobRecord) -> JobStatus:
     if job.get("output_path"):
         if settings.hosted and job["status"] in _DOWNLOADABLE:
             file_url = f"/api/compilations/{job['id']}/file"
+            # A download link cannot send the password header, so it carries
+            # a token that unlocks only this job's file.
+            token = file_token(job["id"])
+            if token:
+                file_url = f"{file_url}?token={token}"
         elif job["status"] == "ready":
             download_url = f"/api/compilations/{job['id']}/download"
     return JobStatus(

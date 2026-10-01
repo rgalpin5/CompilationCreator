@@ -35,6 +35,8 @@ class Settings:
         # not choose where on the server a file is written. The finished video
         # goes to the browser instead. Vercel sets VERCEL; Cloud Run sets K_SERVICE.
         self.hosted = bool(os.environ.get("VERCEL") or os.environ.get("K_SERVICE"))
+        # Required on a hosted server; see app/auth.py.
+        self.password = os.environ.get("COMPCREATOR_PASSWORD") or None
         origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
         self.cors_origins = [item.strip() for item in origins.split(",") if item.strip()]
 
