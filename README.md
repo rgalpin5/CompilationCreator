@@ -37,7 +37,7 @@ Next.js UI  ──HTTP──►  FastAPI
 
 An export does not run inside the HTTP request that starts it. `POST /api/compilations` validates the timeline, creates a job, and returns `202` with a job id. A background task then moves the job through `queued` → `downloading` → `concatenating` → `ready`. Failure sets `failed`. Cancel sets `cancelled` and deletes the job folder. Saving a finished file sets `saved`.
 
-The UI polls `GET /api/compilations/{job_id}` every two seconds until the job leaves the active states. Keep the page open while an export runs. A long compilation needs substantial disk space: each clip can exist as a raw download, a prepared part, and the joined file until you save.
+The UI polls `GET /api/compilations/{job_id}` every two seconds until the job leaves the active states. Keep the page open while an export runs. A long compilation needs substantial disk space: each clip can exist as a raw download, a prepared part, and the joined file until you save. A failed export deletes its working files. When the API starts and before each new export, it deletes finished jobs nobody saved and leftover job folders (from a crash or restart) that have not changed in 24 hours. Only folders named like a job id are touched, and running exports are never removed.
 
 ### Download and join strategy
 

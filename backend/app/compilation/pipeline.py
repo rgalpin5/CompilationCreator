@@ -229,6 +229,8 @@ def run_compilation(
             output_path=None,
         )
     except (FfmpegError, ConfigurationError, OSError, RuntimeError, ValueError) as exc:
+        # Workers have stopped by now, so nothing is still writing here.
+        shutil.rmtree(job_dir, ignore_errors=True)
         store.update(
             job_id,
             status="failed",
@@ -237,6 +239,7 @@ def run_compilation(
         )
     except Exception:
         log.exception("Export %s failed", job_id)
+        shutil.rmtree(job_dir, ignore_errors=True)
         store.update(
             job_id,
             status="failed",

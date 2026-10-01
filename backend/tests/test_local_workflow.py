@@ -328,8 +328,7 @@ class LocalWorkflowTests(unittest.TestCase):
             stored = jobs.get(job_id)
             self.assertIsNotNone(stored)
             assert stored is not None
-            self.assertTrue(Path(stored["dir"]).is_dir())
-            self.assertFalse(any(Path(stored["dir"]).glob("*.mp4")))
+            self.assertFalse(Path(stored["dir"]).exists())
 
     def test_usage_log_failure_still_finishes_the_export(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, _quiet_network():
