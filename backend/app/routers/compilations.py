@@ -1,12 +1,20 @@
 import threading
+from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 
 from app.compilation.pipeline import run_compilation
 from app.compilation.validate import validate_timeline
 from app.config import settings
-from app.delivery import default_download_dir, deliver_compilation, resolve_directory
+from app.delivery import (
+    default_download_dir,
+    deliver_compilation,
+    remove_job_folder,
+    resolve_directory,
+    safe_filename,
+)
 from app.errors import terminal_message
 from app.jobs.runner import runner
 from app.jobs.store import JobStore
@@ -16,6 +24,9 @@ from app.routers.deps import get_job_store, get_usage_store
 from app.usage.store import UsageStore
 
 _ACTIVE = {"queued", "downloading", "concatenating"}
+# A browser download stays available while saved, until the grace period ends.
+_DOWNLOADABLE = {"ready", "saved"}
+BROWSER_DOWNLOAD_GRACE_SECONDS = 600.0
 
 router = APIRouter()
 _save_lock = threading.Lock()
@@ -87,6 +98,12 @@ def download_compilation(
     job_store: JobStore = Depends(get_job_store),
 ) -> JobStatus:
     """Copy the finished video to Downloads or a chosen folder, then delete the job."""
+    if settings.hosted:
+        # Downloads here would be the server's own folder, out of the user's reach.
+        raise HTTPException(
+            status_code=409,
+            detail="This server sends the video to your browser. Use the download link.",
+        )
     with _save_lock:
         job = job_store.get(job_id)
         if not job:
@@ -127,16 +144,81 @@ def download_compilation(
         return _public(saved_job)
 
 
+@router.get("/compilations/{job_id}/file")
+def compilation_file(
+    job_id: str,
+    request: Request,
+    job_store: JobStore = Depends(get_job_store),
+) -> FileResponse:
+    """Send the finished video to the browser, then delete the job after a grace period.
+
+    A full response marks the job saved and keeps the file for
+    ``BROWSER_DOWNLOAD_GRACE_SECONDS`` so an interrupted download can be retried.
+    """
+    job = job_store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    output_path = job.get("output_path")
+    if job["status"] not in _DOWNLOADABLE or not output_path:
+        raise HTTPException(status_code=404, detail="Compilation is not ready")
+    if not Path(output_path).is_file():
+        raise HTTPException(status_code=404, detail="Compilation file is missing")
+    # Starlette runs the background task after any response, including a
+    # partial range, so only a full request may start the countdown.
+    finish = None
+    if "range" not in request.headers:
+        finish = BackgroundTask(_finish_browser_download, job_store, job_id)
+    return FileResponse(
+        output_path,
+        media_type="video/mp4",
+        filename=safe_filename(job.get("filename")),
+        background=finish,
+    )
+
+
+def _finish_browser_download(job_store: JobStore, job_id: str) -> None:
+    """Mark ``job_id`` downloaded and schedule its working files for deletion.
+
+    Every byte reaching the socket does not prove the browser kept the file:
+    uvicorn buffers the tail and drops it silently when the client leaves.
+    """
+    with _save_lock:
+        job = job_store.get(job_id)
+        if not job or job["status"] != "ready":
+            return
+        job_store.update(job_id, status="saved", progress="Downloaded", error=None)
+    timer = threading.Timer(
+        BROWSER_DOWNLOAD_GRACE_SECONDS, _expire_browser_download, (job_store, job_id)
+    )
+    timer.daemon = True
+    timer.start()
+
+
+def _expire_browser_download(job_store: JobStore, job_id: str) -> None:
+    """Delete a browser-downloaded job's files once its grace period ends."""
+    with _save_lock:
+        job = job_store.get(job_id)
+        if not job or job["status"] != "saved" or not job.get("output_path"):
+            return
+        job_store.update(job_id, output_path=None)
+        remove_job_folder(job["dir"])
+
+
 def _public(job: JobRecord) -> JobStatus:
     """The job fields the API returns. Working paths stay on the server."""
     download_url = None
-    if job["status"] == "ready" and job.get("output_path"):
-        download_url = f"/api/compilations/{job['id']}/download"
+    file_url = None
+    if job.get("output_path"):
+        if settings.hosted and job["status"] in _DOWNLOADABLE:
+            file_url = f"/api/compilations/{job['id']}/file"
+        elif job["status"] == "ready":
+            download_url = f"/api/compilations/{job['id']}/download"
     return JobStatus(
         id=job["id"],
         status=job["status"],
         progress=job["progress"],
         error=job.get("error"),
         download_url=download_url,
+        file_url=file_url,
         saved_path=job.get("saved_path"),
     )

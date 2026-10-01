@@ -103,10 +103,15 @@ def deliver_compilation(
     except OSError:
         partial.unlink(missing_ok=True)
         raise
+    remove_job_folder(job_dir)
+    return target
+
+
+def remove_job_folder(job_dir: str | Path) -> None:
+    """Delete a delivered job's working files, logging instead of raising."""
     try:
         shutil.rmtree(job_dir)
     except OSError:
         # The video is already saved. A file still held open (common on
         # Windows) must not turn that into an error and invite a second copy.
         log.warning("Could not remove working files at %s", job_dir, exc_info=True)
-    return target

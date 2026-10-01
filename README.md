@@ -125,7 +125,8 @@ CompCreator/
 | `GET` | `/api/compilations/{job_id}` | Status and progress |
 | `POST` | `/api/compilations/{job_id}/cancel` | Stop a running export and delete its files |
 | `GET` | `/api/download-folder` | Default save folder (`~/Downloads`) |
-| `POST` | `/api/compilations/{job_id}/download` | Copy the MP4 to Downloads or `{"directory": "/full/path"}`, then delete the job folder |
+| `POST` | `/api/compilations/{job_id}/download` | Copy the MP4 to Downloads or `{"directory": "/full/path"}`, then delete the job folder. Local and desktop only; a hosted server returns `409` |
+| `GET` | `/api/compilations/{job_id}/file` | Send the MP4 to the browser as an attachment. A full response marks the job `saved` and deletes the job folder 10 minutes later, so an interrupted download can be retried. A `Range` request does not start that countdown |
 | `GET` | `/api/usage?ids=` | Compilation counts for up to 50 video ids |
 | `GET` | `/api/logs` | Video history and compilation history |
 
@@ -150,7 +151,7 @@ A compilation body looks like this:
 
 `video_id` must be an 11-character YouTube id. `start` and `end` are `mm:ss` or `hh:mm:ss`, and `end` must be after `start`. At least one clip is required. There is no maximum clip count.
 
-Job statuses: `queued`, `downloading`, `concatenating`, `ready`, `saved`, `failed`, `cancelled`. `download_url` is present only while the status is `ready`. `saved_path` is present after a successful save and is the only remaining copy.
+Job statuses: `queued`, `downloading`, `concatenating`, `ready`, `saved`, `failed`, `cancelled`. While the status is `ready`, a local or desktop server sets `download_url` (save into a folder) and a hosted server sets `file_url` (download in the browser). A server counts as hosted when `VERCEL` or `K_SERVICE` (Cloud Run) is set. `saved_path` is present after a folder save and is the only remaining copy. A browser download ends in `saved` with no `saved_path`, and `file_url` stays available for 10 minutes.
 
 ## Environment variables
 
@@ -310,7 +311,7 @@ The `Desktop packages` GitHub Actions workflow builds both installers and commit
 
 `vercel.json` runs two services from one project. The frontend root is `frontend/` (Next.js). The backend root is `backend/` (FastAPI, entrypoint `app.main:app`). Rewrites send `/health` and `/api/*` to the backend and everything else to the frontend.
 
-Leave `NEXT_PUBLIC_API_URL` unset so the browser calls `/api` on the same host. Set `YTDLP_COOKIES` or `YTDLP_COOKIES_FILE` in the project environment when YouTube requires a signed-in session. Do not commit cookie files. Job files on Vercel use `/tmp` and do not survive a new instance. The usage log sits next to `JOBS_DIR` (`usage.json`) and has the same lifetime.
+Leave `NEXT_PUBLIC_API_URL` unset so the browser calls `/api` on the same host. Set `YTDLP_COOKIES` or `YTDLP_COOKIES_FILE` in the project environment when YouTube requires a signed-in session. Do not commit cookie files. Finished videos are sent to the browser through `/api/compilations/{job_id}/file`. Job files on Vercel use `/tmp` and do not survive a new instance. The usage log sits next to `JOBS_DIR` (`usage.json`) and has the same lifetime.
 
 ### Cloud Run (optional)
 
@@ -325,6 +326,7 @@ gcloud run deploy compcreator-api \
   --memory 8Gi \
   --timeout 3600 \
   --no-cpu-throttling \
+  --max-instances 1 \
   --allow-unauthenticated \
   --set-env-vars "CORS_ORIGINS=https://your-app.vercel.app"
 ```

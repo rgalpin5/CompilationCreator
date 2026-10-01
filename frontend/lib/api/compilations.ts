@@ -1,5 +1,10 @@
-import { request } from "./client";
+import { API_BASE, request } from "./client";
 import type { ClipPayload, Job } from "./types";
+
+/** Absolute link for a job's ``file_url``, which the browser downloads directly. */
+export function compilationFileHref(fileUrl: string): string {
+  return `${API_BASE}${fileUrl}`;
+}
 
 /** Queue an export and return the new job. */
 export function createCompilation(clips: ClipPayload[], output4k = false): Promise<Job> {

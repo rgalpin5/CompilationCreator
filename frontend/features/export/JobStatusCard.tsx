@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
+import { compilationFileHref } from "@/lib/api/compilations";
 import type { Job, JobStatus } from "@/lib/api/types";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +23,8 @@ export default function JobStatusCard({
   onFolderChange,
   onDownload,
 }: Props) {
+  // Keyed by job so a new export starts without the earlier "started" note.
+  const [startedFor, setStartedFor] = useState<string | null>(null);
   return (
     <div className={cn("flex flex-col gap-1 rounded-lg px-3 py-2 text-sm", statusTone(job.status))}>
       <p>
@@ -31,7 +35,24 @@ export default function JobStatusCard({
       {job.status === "failed" && (
         <p className="text-destructive">{job.error || "Compilation failed."}</p>
       )}
-      {job.status === "ready" && (
+      {job.status === "ready" && job.file_url && (
+        <div className="flex flex-col gap-2 pt-1">
+          <p className="text-muted-foreground">
+            {startedFor === job.id
+              ? "Your browser is downloading the MP4. If the download was interrupted, download it again within 10 minutes."
+              : "Your browser saves the MP4. The server deletes its copy 10 minutes after the download finishes."}
+          </p>
+          <a
+            href={compilationFileHref(job.file_url)}
+            download
+            className={buttonVariants({ variant: "outline" })}
+            onClick={() => setStartedFor(job.id)}
+          >
+            Download MP4
+          </a>
+        </div>
+      )}
+      {job.status === "ready" && !job.file_url && (
         <div className="flex flex-col gap-2 pt-1">
           <label className="flex flex-col gap-1 text-sm">
             Save folder

@@ -65,5 +65,7 @@ export type Job = {
   progress: string | null;
   error: string | null;
   download_url: string | null;
+  /** Set on hosted deploys, where the browser downloads the MP4 itself. */
+  file_url: string | null;
   saved_path: string | null;
 };

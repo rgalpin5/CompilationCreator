@@ -32,8 +32,9 @@ class Settings:
         jobs = os.environ.get("JOBS_DIR")
         self.jobs_dir = Path(jobs) if jobs else _default_jobs_dir()
         # A hosted deploy serves anyone who can reach it, so the caller must
-        # not choose where on the server a file is written.
-        self.hosted = bool(os.environ.get("VERCEL"))
+        # not choose where on the server a file is written. The finished video
+        # goes to the browser instead. Vercel sets VERCEL; Cloud Run sets K_SERVICE.
+        self.hosted = bool(os.environ.get("VERCEL") or os.environ.get("K_SERVICE"))
         origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
         self.cors_origins = [item.strip() for item in origins.split(",") if item.strip()]
 

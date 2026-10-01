@@ -66,4 +66,5 @@ class JobStatus(BaseModel):
     progress: str
     error: str | None = None
     download_url: str | None = None
+    file_url: str | None = None
     saved_path: str | None = None

@@ -1,9 +1,12 @@
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from starlette.requests import Request
+from starlette.types import Message
 
 from app.delivery import deliver_compilation, resolve_directory, safe_filename
 from app.jobs.store import JobStore
@@ -165,6 +168,124 @@ class DeliveryTests(unittest.TestCase):
                 named = resolve_directory(str(home / "Downloads"), allow_custom=False)
             self.assertEqual(blank, (home / "Downloads").resolve())
             self.assertEqual(named, blank)
+
+
+def _request(job_id: str, headers: dict[str, str] | None = None) -> Request:
+    raw = [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()]
+    path = f"/api/compilations/{job_id}/file"
+    return Request({"type": "http", "method": "GET", "path": path, "headers": raw})
+
+
+def _send_file(
+    jobs: JobStore, job_id: str, headers: dict[str, str] | None = None, *, drop: bool = False
+) -> tuple[bytes, dict[str, str]]:
+    """Run the file route as an ASGI app. ``drop`` fails the send like a closed socket."""
+    request = _request(job_id, headers)
+    response = compilations.compilation_file(job_id, request, jobs)
+    body = bytearray()
+    sent_headers: dict[str, str] = {}
+
+    async def receive() -> Message:
+        await asyncio.sleep(3600)
+        return {"type": "http.disconnect"}
+
+    async def send(message: Message) -> None:
+        if message["type"] == "http.response.start":
+            sent_headers.update({k.decode(): v.decode() for k, v in message["headers"]})
+        elif message["type"] == "http.response.body":
+            if drop:
+                raise OSError("connection reset")
+            body.extend(message.get("body", b""))
+
+    asyncio.run(response(request.scope, receive, send))
+    return bytes(body), sent_headers
+
+
+class BrowserDownloadTests(unittest.TestCase):
+    def test_full_download_keeps_the_file_for_the_grace_period_then_clears_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs, job, job_dir = _ready_job(Path(tmp))
+            with patch("app.routers.compilations.threading.Timer") as timer:
+                body, headers = _send_file(jobs, job["id"])
+                # A second full download inside the grace period does not restart it.
+                again, _ = _send_file(jobs, job["id"])
+            self.assertEqual(body, b"final-video")
+            self.assertEqual(again, b"final-video")
+            self.assertEqual(headers["content-type"], "video/mp4")
+            self.assertIn("attachment", headers["content-disposition"])
+            self.assertTrue((job_dir / "compilation.mp4").is_file())
+            stored = jobs.get(job["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "saved")
+            timer.assert_called_once()
+            delay, expire, args = timer.call_args.args
+            self.assertEqual(delay, compilations.BROWSER_DOWNLOAD_GRACE_SECONDS)
+
+            expire(*args)
+            self.assertFalse(job_dir.exists())
+            with self.assertRaises(HTTPException) as caught:
+                compilations.compilation_file(job["id"], _request(job["id"]), jobs)
+            self.assertEqual(caught.exception.status_code, 404)
+            self.assertIsNone(compilations.compilation_status(job["id"], jobs).file_url)
+
+    def test_client_that_leaves_silently_can_still_download_again(self) -> None:
+        # uvicorn drops writes after a disconnect instead of raising, so a
+        # truncated download looks complete to the server.
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs, job, job_dir = _ready_job(Path(tmp))
+            with patch("app.routers.compilations.threading.Timer"):
+                _send_file(jobs, job["id"])
+                body, _ = _send_file(jobs, job["id"])
+            self.assertEqual(body, b"final-video")
+            self.assertTrue((job_dir / "compilation.mp4").is_file())
+
+    def test_dropped_connection_keeps_the_job_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs, job, job_dir = _ready_job(Path(tmp))
+            with self.assertRaises(OSError):
+                _send_file(jobs, job["id"], drop=True)
+            self.assertTrue((job_dir / "compilation.mp4").is_file())
+            stored = jobs.get(job["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "ready")
+
+    def test_ranged_request_keeps_the_job_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs, job, job_dir = _ready_job(Path(tmp))
+            body, _ = _send_file(jobs, job["id"], {"Range": "bytes=0-4"})
+            self.assertEqual(body, b"final")
+            self.assertTrue((job_dir / "compilation.mp4").is_file())
+            stored = jobs.get(job["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "ready")
+
+    def test_unfinished_job_has_no_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs = JobStore(Path(tmp) / "jobs")
+            job = jobs.create()
+            with self.assertRaises(HTTPException) as caught:
+                compilations.compilation_file(job["id"], _request(job["id"]), jobs)
+            self.assertEqual(caught.exception.status_code, 404)
+
+    def test_hosted_status_offers_the_browser_link_and_refuses_a_server_save(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs, job, job_dir = _ready_job(Path(tmp))
+            with patch.object(compilations.settings, "hosted", True):
+                status = compilations.compilation_status(job["id"], jobs)
+                with self.assertRaises(HTTPException) as caught:
+                    compilations.download_compilation(job["id"], None, jobs)
+            self.assertEqual(status.file_url, f"/api/compilations/{job['id']}/file")
+            self.assertIsNone(status.download_url)
+            self.assertEqual(caught.exception.status_code, 409)
+            self.assertTrue((job_dir / "compilation.mp4").is_file())
+
+    def test_local_status_keeps_the_folder_save(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs, job, _ = _ready_job(Path(tmp))
+            with patch.object(compilations.settings, "hosted", False):
+                status = compilations.compilation_status(job["id"], jobs)
+            self.assertIsNone(status.file_url)
+            self.assertEqual(status.download_url, f"/api/compilations/{job['id']}/download")
 
 
 if __name__ == "__main__":
