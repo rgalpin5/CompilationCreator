@@ -40,3 +40,6 @@ frontend/.env.local
 
 # Local audit notes
 COMPCREATOR_AUDIT.md
+
+# Claude Code local state
+.claude/
