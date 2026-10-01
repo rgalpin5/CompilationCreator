@@ -205,7 +205,9 @@ def _require_python() -> None:
 def _require_node() -> None:
     node = shutil.which("node")
     if node is None or shutil.which("npm") is None:
-        raise SystemExit("Node.js 20 or newer and npm are required. Install them from https://nodejs.org/.")
+        raise SystemExit(
+            "Node.js 20 or newer and npm are required. Install them from https://nodejs.org/."
+        )
     raw = subprocess.check_output([node, "--version"], text=True).strip()
     if node_is_supported(raw):
         return

@@ -11,6 +11,7 @@ from app.jobs.runner import runner
 
 class StreamLayout(NamedTuple):
     """Codec, picture, and audio fields that decide whether clips can be copied."""
+
     video_codec: str
     width: int
     height: int

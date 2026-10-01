@@ -48,7 +48,4 @@ def _format_selector(output_4k: bool) -> str:
             "bv*[height<=2160]+ba/"
             "b"
         )
-    return (
-        "bv*[height<=1080][vcodec^=avc1]+ba[acodec^=mp4a]/"
-        "bv*[height<=1080]+ba/b[height<=1080]/b"
-    )
+    return "bv*[height<=1080][vcodec^=avc1]+ba[acodec^=mp4a]/bv*[height<=1080]+ba/b[height<=1080]/b"

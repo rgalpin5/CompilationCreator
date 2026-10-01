@@ -124,8 +124,7 @@ class PasswordTests(unittest.TestCase):
         job_id = uuid.uuid4().hex
         with patch.object(settings, "password", _SECRET):
             refused = [
-                call(f"/api/compilations/{job_id}/file", query="token=%C3%A9")[0]
-                for _ in range(5)
+                call(f"/api/compilations/{job_id}/file", query="token=%C3%A9")[0] for _ in range(5)
             ]
             paused, _, _ = call("/api/session", headers={"Authorization": f"Bearer {_SECRET}"})
         self.assertEqual(refused, [401] * 5)
