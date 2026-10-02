@@ -18,17 +18,12 @@ def detect_browser() -> str | None:
             ("safari", Path("/Applications/Safari.app")),
         ]
     elif sys.platform == "win32":
-        local = Path(os.environ.get("LOCALAPPDATA", ""))
-        program = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
-        program_x86 = Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
-        candidates = [
-            ("chrome", local / "Google" / "Chrome" / "Application" / "chrome.exe"),
-            ("chrome", program / "Google" / "Chrome" / "Application" / "chrome.exe"),
-            ("edge", program_x86 / "Microsoft" / "Edge" / "Application" / "msedge.exe"),
-            ("edge", program / "Microsoft" / "Edge" / "Application" / "msedge.exe"),
-            ("brave", local / "BraveSoftware" / "Brave-Browser" / "Application" / "brave.exe"),
-            ("firefox", program / "Mozilla Firefox" / "firefox.exe"),
-        ]
+        # Chrome, Edge and Brave on Windows encrypt cookies with a key only the
+        # browser itself can unlock (app-bound encryption), so yt-dlp fails with
+        # "failed to load cookies". Firefox is the one browser it can read there,
+        # and only once a profile exists.
+        appdata = Path(os.environ.get("APPDATA", ""))
+        candidates = [("firefox", appdata / "Mozilla" / "Firefox" / "Profiles")]
     else:
         return None
     for name, path in candidates:

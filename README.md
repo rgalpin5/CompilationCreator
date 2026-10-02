@@ -56,7 +56,7 @@ Listing and downloading go through the `yt-dlp` Python library in-process. A coo
 
 1. `YTDLP_COOKIES_FILE` — path to a Netscape `cookies.txt`.
 2. `YTDLP_COOKIES` — the file contents, or those contents encoded as base64.
-3. `YTDLP_COOKIES_BROWSER` — browser name (`chrome`, `brave`, `edge`, `firefox`, `safari`). The desktop app sets this to the first installed browser, unless it is `none`.
+3. `YTDLP_COOKIES_BROWSER` — browser name (`chrome`, `brave`, `edge`, `firefox`, `safari`). The desktop app sets this to the first installed browser on macOS. On Windows it uses Firefox only, when a Firefox profile exists, because Chrome, Edge and Brave encrypt their cookies in a way yt-dlp cannot read there. With no usable browser it sends no cookies. Set the variable yourself (for example to `none`) to override it.
 
 When cookies are sent, yt-dlp must solve YouTube’s player challenge. That requires Deno 2.3 or newer. Set `YTDLP_DENO` to the binary if it is not on `PATH` or in the usual install locations (`~/.deno/bin`, Homebrew on macOS).
 

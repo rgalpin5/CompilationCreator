@@ -22,12 +22,23 @@ class DetectBrowserTests(unittest.TestCase):
         ):
             self.assertEqual(browser.detect_browser(), "firefox")
 
-    def test_windows_checks_local_and_program_files(self) -> None:
+    def test_windows_uses_a_firefox_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "Mozilla" / "Firefox" / "Profiles").mkdir(parents=True)
+            with (
+                patch.object(browser, "sys", SimpleNamespace(platform="win32")),
+                patch.dict(os.environ, {"APPDATA": tmp}),
+            ):
+                self.assertEqual(browser.detect_browser(), "firefox")
+
+    def test_windows_skips_chromium_browsers(self) -> None:
+        # Their app-bound cookie encryption makes yt-dlp fail to load cookies.
         with tempfile.TemporaryDirectory() as tmp:
             edge = Path(tmp) / "x86" / "Microsoft" / "Edge" / "Application" / "msedge.exe"
             edge.parent.mkdir(parents=True)
             edge.write_bytes(b"")
             env = {
+                "APPDATA": str(Path(tmp) / "roaming"),
                 "LOCALAPPDATA": str(Path(tmp) / "local"),
                 "PROGRAMFILES": str(Path(tmp) / "pf"),
                 "PROGRAMFILES(X86)": str(Path(tmp) / "x86"),
@@ -36,7 +47,7 @@ class DetectBrowserTests(unittest.TestCase):
                 patch.object(browser, "sys", SimpleNamespace(platform="win32")),
                 patch.dict(os.environ, env),
             ):
-                self.assertEqual(browser.detect_browser(), "edge")
+                self.assertIsNone(browser.detect_browser())
 
     def test_nothing_installed_returns_none(self) -> None:
         with (
