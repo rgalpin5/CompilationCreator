@@ -64,6 +64,18 @@ export const ArrowRightIcon = (props: IconProps) => (
   </Icon>
 );
 
+export const PlayIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M7 5v14l11-7z" />
+  </Icon>
+);
+
+export const PauseIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M9 5v14M15 5v14" />
+  </Icon>
+);
+
 /** The brand mark: a kept span between two trim handles. */
 export const LogoMark = (props: IconProps) => (
   <svg viewBox="0 0 32 32" aria-hidden="true" {...props}>

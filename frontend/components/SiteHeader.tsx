@@ -7,7 +7,7 @@ export default function SiteHeader({ nav, actions }: { nav?: ReactNode; actions?
   return (
     <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-4 px-4 md:px-6">
-        <Link href="/" className="flex shrink-0 items-center gap-2 rounded-md">
+        <Link href="/" className="focus-ring flex shrink-0 items-center gap-2 rounded-md">
           <LogoMark className="size-7" />
           <span className="font-heading text-lg font-semibold tracking-tight">CompCreator</span>
         </Link>

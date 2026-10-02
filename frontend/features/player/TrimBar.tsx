@@ -144,7 +144,7 @@ function Handle({
       disabled={disabled}
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
-      className="absolute top-1 h-6 w-2.5 -translate-x-1/2 cursor-ew-resize rounded-sm border-2 border-foreground bg-background shadow-md touch-none focus-visible:ring-3 focus-visible:ring-ring/60 focus-visible:outline-none disabled:opacity-50"
+      className="absolute top-1 h-6 w-2.5 -translate-x-1/2 cursor-ew-resize rounded-sm border-2 border-foreground bg-background shadow-md touch-none after:absolute after:-inset-x-2 after:-inset-y-2 after:content-[''] focus-visible:ring-3 focus-visible:ring-ring/60 focus-visible:outline-none disabled:opacity-50"
       style={{ left: `${percent}%` }}
     />
   );

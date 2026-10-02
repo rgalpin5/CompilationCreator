@@ -187,7 +187,7 @@ function ViewTab({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        "rounded-md px-3 py-1 text-sm transition-colors",
+        "rounded-sm px-3 py-1 text-sm transition-[color,background-color,box-shadow] duration-150",
         active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
       )}
     >

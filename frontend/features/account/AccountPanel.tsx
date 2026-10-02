@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MIN_PASSWORD_LENGTH } from "@/lib/account/types";
@@ -10,6 +10,8 @@ import { useAccount } from "./AccountContext";
 
 type Mode = "sign-up" | "sign-in";
 
+const MODES = ["sign-up", "sign-in"] as const;
+
 /** Create an account or sign in; once signed in, show who and offer sign-out. */
 export default function AccountPanel() {
   const { status, account, signUp, signIn, signOut } = useAccount();
@@ -18,6 +20,28 @@ export default function AccountPanel() {
   const [password, setPassword] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const id = useId();
+  const tabRefs = useRef<Partial<Record<Mode, HTMLButtonElement | null>>>({});
+
+  function choose(value: Mode) {
+    setMode(value);
+    setProblem(null);
+  }
+
+  // Tabs pattern: arrows, Home and End move between the two modes; Tab goes on to the form.
+  function onTabKey(event: KeyboardEvent<HTMLButtonElement>) {
+    const index = MODES.indexOf(mode);
+    const next =
+      event.key === "ArrowRight" ? MODES[(index + 1) % MODES.length]
+      : event.key === "ArrowLeft" ? MODES[(index - 1 + MODES.length) % MODES.length]
+      : event.key === "Home" ? MODES[0]
+      : event.key === "End" ? MODES[MODES.length - 1]
+      : undefined;
+    if (!next) return;
+    event.preventDefault();
+    choose(next);
+    tabRefs.current[next]?.focus();
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,18 +82,22 @@ export default function AccountPanel() {
   return (
     <div className="flex min-h-72 flex-col gap-5">
       <div role="tablist" aria-label="Account" className="inline-flex self-start rounded-lg bg-muted p-1">
-        {(["sign-up", "sign-in"] as const).map((value) => (
+        {MODES.map((value) => (
           <button
             key={value}
+            ref={(element) => {
+              tabRefs.current[value] = element;
+            }}
+            id={`${id}-${value}`}
             type="button"
             role="tab"
             aria-selected={mode === value}
-            onClick={() => {
-              setMode(value);
-              setProblem(null);
-            }}
+            aria-controls={`${id}-panel`}
+            tabIndex={mode === value ? 0 : -1}
+            onClick={() => choose(value)}
+            onKeyDown={onTabKey}
             className={cn(
-              "rounded-md px-3 py-1 text-sm transition-colors",
+              "focus-ring rounded-sm px-3 py-1 text-sm transition-[color,background-color,box-shadow] duration-150",
               mode === value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -77,7 +105,14 @@ export default function AccountPanel() {
           </button>
         ))}
       </div>
-      <form className="flex flex-col gap-3" onSubmit={submit} noValidate>
+      <form
+        id={`${id}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${id}-${mode}`}
+        className="flex flex-col gap-3"
+        onSubmit={submit}
+        noValidate
+      >
         <label className="flex flex-col gap-1.5 text-sm">
           Email
           <Input
@@ -98,11 +133,16 @@ export default function AccountPanel() {
             value={password}
             disabled={submitting}
             aria-invalid={problem ? true : undefined}
+            aria-describedby={problem ? `${id}-problem` : undefined}
             onChange={(event) => setPassword(event.target.value)}
             className="h-10"
           />
         </label>
-        {problem && <p className="text-sm text-destructive">{problem}</p>}
+        {problem && (
+          <p id={`${id}-problem`} role="alert" className="text-sm text-destructive">
+            {problem}
+          </p>
+        )}
         <Button type="submit" size="lg" className="mt-1 h-10" disabled={submitting || !email || !password}>
           {submitting ? "One moment…" : mode === "sign-up" ? "Create account" : "Sign in"}
         </Button>

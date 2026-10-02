@@ -25,7 +25,7 @@ export default function VideoCard({ video, selected, onSelect }: Props) {
       <Card
         size="sm"
         className={cn(
-          "h-full pt-0 transition duration-150 hover:-translate-y-0.5",
+          "h-full pt-0 transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 motion-reduce:hover:translate-y-0",
           selected ? "ring-2 ring-primary" : "ring-border hover:ring-foreground/25",
         )}
       >

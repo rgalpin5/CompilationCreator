@@ -14,7 +14,7 @@ export function LogTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] border-collapse text-sm">{children}</table>
+      <table className="w-full min-w-[720px] border-collapse text-sm tabular-nums">{children}</table>
       {isEmpty && <p className="px-2 py-6 text-sm text-muted-foreground">{empty}</p>}
     </div>
   );

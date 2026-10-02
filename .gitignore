@@ -41,3 +41,6 @@ COMPCREATOR_AUDIT.md
 
 # Claude Code local state
 .claude/
+
+# Design-loop scratch output (screenshots, feedback)
+gan-harness/

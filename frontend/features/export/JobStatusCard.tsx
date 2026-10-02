@@ -26,7 +26,7 @@ export default function JobStatusCard({
   // Keyed by job so a new export starts without the earlier "started" note.
   const [startedFor, setStartedFor] = useState<string | null>(null);
   return (
-    <div className={cn("flex flex-col gap-1 rounded-lg px-3 py-2 text-sm", statusTone(job.status))}>
+    <div className={cn("flex flex-col gap-1 rounded-lg px-3 py-2 text-sm tabular-nums", statusTone(job.status))}>
       <p>
         <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">Status</span>{" "}
         <span className="font-medium capitalize">{job.status}</span>
